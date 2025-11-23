@@ -1,0 +1,8 @@
+# config.ini.example
+[DeepL_API]
+user=<YOUR_DEEPL_EMAIL>
+pwd=<YOUR_DEEPL_PASSWORD>
+API=<YOUR_DEEPL_API_KEY>
+
+[OMDb_API]
+OMDB_KEY=<YOUR_OMDB_API_KEY>
