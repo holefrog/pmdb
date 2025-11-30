@@ -1,0 +1,33 @@
+# ============================================
+# PMDB 配置文件
+# ============================================
+
+[DeepL_API]
+# DeepL API 密钥（必填）
+# 获取地址: https://www.deepl.com/pro-api
+user=<YOUR_DEEPL_EMAIL>
+pwd=<YOUR_DEEPL_PASSWORD>
+API=<YOUR_DEEPL_API_KEY>
+
+[OMDb_API]
+# OMDb API 密钥（可选，暂未使用）
+OMDB_KEY=<YOUR_OMDB_API_KEY>
+
+[Settings]
+# 程序运行配置（可选，以下为默认值）
+
+# 并行工作线程数（建议 3-10）
+max_workers=5
+
+# 最大处理电影数量
+max_movies=100
+
+# DeepL 每批翻译文本数量（建议 10-50）
+deepl_batch_size=50
+
+# 网络请求超时时间（秒）
+request_timeout=10
+
+# 请求延迟范围（秒，避免触发反爬虫）
+retry_delay_min=0.2
+retry_delay_max=0.5

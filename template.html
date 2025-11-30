@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>{{ title }}</title>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f5f5f5;
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+        }
+        .container {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: space-between;
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        .movie-item {
+            width: 49%;
+            margin-bottom: 20px;
+            overflow: hidden;
+            border: 1px solid #ddd;
+            padding: 15px;
+            background-color: white;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            border-radius: 5px;
+            position: relative;
+        }
+        img {
+            max-width: 150px;
+            height: auto;
+            margin-right: 15px;
+            float: left;
+            cursor: pointer;
+            border-radius: 3px;
+        }
+        img:hover {
+            opacity: 0.8;
+        }
+        .movie-title {
+            font-size: 1.2em;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        /* -- LINEAR GAUGE UI Styles -- */
+        .rating-display {
+            display: flex;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        .linear-gauge-container {
+            width: 100px; /* 进度条总长度 (100% 参照) */
+            height: 10px;
+            background-color: #e0e0e0; /* 进度条底色 */
+            border-radius: 5px;
+            margin-left: 10px;
+            position: relative;
+            overflow: hidden;
+        }
+        .linear-gauge-bar {
+            height: 100%;
+            border-radius: 5px;
+        }
+
+        /* 评分数值颜色分级 */
+        .rating-score { font-weight: bold; font-size: 1em; }
+        .rating-low { color: #a9a9a9; } /* <-- 变浅的灰色 */
+        .rating-mid { color: #4a90e2; } 
+        .rating-high { color: #ff6b6b; }
+        
+        /* 进度条填充颜色分级 */
+        .fill-low { background-color: #a9a9a9; } /* <-- 变浅的灰色 */
+        .fill-mid { background-color: #4a90e2; } 
+        .fill-high { background-color: #ff6b6b; }
+        /* ------------------------------------------- */
+        
+        .summary-cn {
+            color: #4a90e2;
+            margin-top: 10px;
+            line-height: 1.6;
+        }
+        .summary-en {
+            color: #666;
+            margin-top: 8px;
+            font-style: italic;
+            line-height: 1.5;
+        }
+        .movie-content {
+            overflow: hidden;
+        }
+        /* 计数器样式 */
+        .counter {
+            position: absolute;
+            bottom: 15px;
+            right: 15px;
+            font-size: 1.5em;
+            font-weight: bold;
+            color: #ccc;
+            z-index: 10;
+        }
+        @media (max-width: 768px) {
+            .movie-item {
+                width: 100%;
+            }
+        }
+    </style>
+    <script>
+        function openImage(url) {
+            window.open(url, '_blank');
+        }
+    </script>
+</head>
+<body>
+    <h1>{{ title }}</h1>
+    <div class="container">
+        {% for movie in movies %}
+        <div class="movie-item">
+            <img src='{{ movie.image_url }}'
+                  alt='{{ movie.name }}'
+                  ondblclick="openImage('{{ movie.image_url }}')">
+            <div class="movie-content">
+                <div class="movie-title">{{ movie.name }}</div>
+                
+                {# 评分数值 #}
+                {% set rating_val = movie.rating | float(default=0.0) %}
+                
+                {# 计算进度条宽度 (X.X分 = X0% 宽度) #}
+                {% set width_percent = rating_val * 10 %}
+                
+                {# 确定颜色等级 #}
+                {% if rating_val >= 8.0 %}
+                    {% set fill_class = 'fill-high' %}
+                    {% set score_color_class = 'rating-high' %}
+                {% elif rating_val >= 7.0 %}
+                    {% set fill_class = 'fill-mid' %}
+                    {% set score_color_class = 'rating-mid' %}
+                {% else %}
+                    {% set fill_class = 'fill-low' %}
+                    {% set score_color_class = 'rating-low' %}
+                {% endif %}
+                
+                <div class="rating-display">
+                    <div>评分:</div>
+                    
+                    {# Linear Bar Gauge UI #}
+                    <div class="linear-gauge-container">
+                        {# 应用颜色类和动态宽度 #}
+                        <div class="linear-gauge-bar {{ fill_class }}" style="width: {{ width_percent }}%;"></div>
+                    </div>
+                    
+                    {# 显示分数 #}
+                    <span style="margin-left: 10px;">
+                        <span class="rating-score {{ score_color_class }}">{{ movie.rating }}</span>
+                    </span>
+                </div>
+
+                <p class='summary-cn'>{{ movie.summary_cn }}</p>
+                <p class='summary-en'>{{ movie.summary_en }}</p>
+            </div>
+            <div class="counter">{{ loop.index }}</div>
+        </div>
+        {% endfor %}
+        </div>
+</body>
+</html>
