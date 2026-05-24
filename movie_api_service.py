@@ -85,14 +85,29 @@ def get_imdb_info(name: str, config: dict) -> Tuple[Optional[str], Optional[str]
     seen = set()
     unique_titles = [t for t in search_attempts if not (t in seen or seen.add(t))]
 
-    for search_title in unique_titles:
+    search_queries = []
+    # 1. 精确年份
+    for t in unique_titles:
+        search_queries.append((t, year))
+    # 2. 年份 ± 1 (应对不同数据库的年份误差)
+    if year and year.isdigit():
+        y_int = int(year)
+        for t in unique_titles:
+            search_queries.append((t, str(y_int - 1)))
+            search_queries.append((t, str(y_int + 1)))
+    # 3. 不限制年份 (最后兜底)
+    for t in unique_titles:
+        search_queries.append((t, None))
+
+    for search_title, search_year in search_queries:
         params = {
             "apikey": omdb_api_key,
             "t":      search_title,
-            "y":      year,
             "type":   "movie",
             "plot":   "full",
         }
+        if search_year:
+            params["y"] = search_year
 
         try:
             delay = random.uniform(
@@ -114,13 +129,13 @@ def get_imdb_info(name: str, config: dict) -> Tuple[Optional[str], Optional[str]
                     image_url = "https://placehold.co/150x220?text=No+Poster"
 
                 if rating == "N/A" and summary == "No summary available.":
-                    logger.debug(f"找到但数据为空: '{search_title}' ({year})")
+                    logger.debug(f"找到但数据为空: '{search_title}' (y={search_year})")
                     continue
 
-                logger.debug(f"✅ OMDb 命中: '{search_title}' ({year}) → 评分={rating}")
+                logger.debug(f"✅ OMDb 命中: '{search_title}' (y={search_year}) → 评分={rating}")
                 return rating, summary, image_url
             else:
-                logger.debug(f"OMDb 未找到: '{search_title}' ({year}) → {data.get('Error')}")
+                logger.debug(f"OMDb 未找到: '{search_title}' (y={search_year}) → {data.get('Error')}")
 
         except requests.ConnectionError:
             logger.debug(f"网络连接失败 [{name}]")
