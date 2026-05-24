@@ -68,6 +68,9 @@ def _get_imdb_id_from_ai(name: str, mistral_api_key: str, session: requests.Sess
         resp.raise_for_status()
         content = resp.json()['choices'][0]['message']['content'].strip()
         
+        # 打印 AI 的原始回复，方便调试
+        logger.info(f"🤖 AI 对 '{name}' 的原始回复内容: {content}")
+
         # 使用正则提取出以 tt 开头加纯数字的标准的 IMDb ID
         match = re.search(r'tt\d{7,10}', content)
         if match:
