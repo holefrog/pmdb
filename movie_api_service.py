@@ -54,9 +54,11 @@ def _get_imdb_id_from_ai(name: str, mistral_api_key: str, session: requests.Sess
             "Content-Type": "application/json"
         }
         prompt = (
-            f"What is the IMDb ID for the movie '{name}'? "
-            "Please reply ONLY with the exact IMDb ID (which starts with 'tt' followed by numbers). "
-            "Do not output any other text, explanation or punctuation. "
+            f"Find the official IMDb ID for the movie currently titled '{name}'. "
+            "Note: This title might contain extra franchise names, incorrect release years, or be a working title from a torrent release. "
+            "Please infer the correct official movie and return its exact IMDb ID. "
+            "Reply ONLY with the IMDb ID (starting with 'tt' followed by numbers). "
+            "Do not output any other text, explanation, or punctuation. "
             "If you don't know, reply with 'UNKNOWN'."
         )
         payload = {
