@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 def extract_title_year(name):
     """Extract title and year from movie name."""
     name = re.sub(r'\.', ' ', name)
-    pattern = r"^(.*?)(?:\s*\((\d{4})\)|\s+(\d{4})(?:\s|$|\.))"
+    pattern = r"^(.*?)(?:\s*\((\d{4})\)|\s+(\d{4})\s+)"
     match = re.search(pattern, name)
     if match:
         title = match.group(1).strip()
@@ -32,7 +32,7 @@ def get_piratebay_top100():
         with sync_playwright() as p:
             # 启动无头浏览器
             try:
-                browser = p.chromium.launch(headless=True)
+                browser = p.chromium.launch(headless=True, args=['--no-sandbox', '--disable-setuid-sandbox'])
             except Exception as e:
                 logger.warning(f"⚠️ 默认 Chromium 启动失败，尝试使用系统的 Chromium 或 Chrome...")
                 possible_paths = [
@@ -45,7 +45,11 @@ def get_piratebay_top100():
                 
                 if system_browser:
                     logger.info(f"🔍 找到可用的系统浏览器: {system_browser}")
-                    browser = p.chromium.launch(headless=True, executable_path=system_browser)
+                    browser = p.chromium.launch(
+                        headless=True, 
+                        executable_path=system_browser,
+                        args=['--no-sandbox', '--disable-setuid-sandbox']
+                    )
                 else:
                     logger.error("❌ 未能在系统中找到可用的 Chromium 或 Chrome 浏览器。")
                     raise e

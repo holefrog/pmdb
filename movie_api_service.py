@@ -76,9 +76,22 @@ def get_imdb_info(name: str, config: dict) -> Tuple[Optional[str], Optional[str]
 
     # 多阶段搜索：完整清理标题 → 前3个词 → 原始标题
     search_attempts = [cleaned_title]
+    
+    # 1. 尝试修复缺失的撇号 (例如 "Tom Clancys" -> "Tom Clancy's")
+    apostrophe_title = re.sub(r'\b([A-Za-z]{3,})s\b', r"\1's", cleaned_title)
+    if apostrophe_title != cleaned_title:
+        search_attempts.append(apostrophe_title)
+        
+    # 2. 尝试移除高频的干扰性作者前缀 (例如 "Tom Clancys ")
+    no_author_title = re.sub(r'(?i)^tom clancys?\s+', '', cleaned_title).strip()
+    if no_author_title and no_author_title != cleaned_title:
+        search_attempts.append(no_author_title)
+
     words = cleaned_title.split()
+    
     if len(words) > 3:
         search_attempts.append(" ".join(words[:3]))
+
     if cleaned_title != title:
         search_attempts.append(title)
 
