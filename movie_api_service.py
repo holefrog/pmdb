@@ -46,6 +46,36 @@ def clean_title_for_search(title: str) -> str:
     cleaned = re.sub(r'\s+', ' ', cleaned).strip()
     return cleaned
 
+def _get_imdb_id_from_ai(name: str, mistral_api_key: str, session: requests.Session, timeout: int) -> Optional[str]:
+    """使用大语言模型智能推理并获取电影的 IMDb ID"""
+    try:
+        headers = {
+            "Authorization": f"Bearer {mistral_api_key}",
+            "Content-Type": "application/json"
+        }
+        prompt = (
+            f"What is the IMDb ID for the movie '{name}'? "
+            "Please reply ONLY with the exact IMDb ID (which starts with 'tt' followed by numbers). "
+            "Do not output any other text, explanation or punctuation. "
+            "If you don't know, reply with 'UNKNOWN'."
+        )
+        payload = {
+            "model": "mistral-small-latest",
+            "messages": [{"role": "user", "content": prompt}],
+            "temperature": 0.1
+        }
+        resp = session.post("https://api.mistral.ai/v1/chat/completions", headers=headers, json=payload, timeout=timeout)
+        resp.raise_for_status()
+        content = resp.json()['choices'][0]['message']['content'].strip()
+        
+        # 使用正则提取出以 tt 开头加纯数字的标准的 IMDb ID
+        match = re.search(r'tt\d{7,10}', content)
+        if match:
+            return match.group(0)
+    except Exception as e:
+        logger.debug(f"AI 获取 IMDb ID 失败: {e}")
+    return None
+
 def get_imdb_info(name: str, config: dict) -> Tuple[Optional[str], Optional[str], Optional[str]]:
     """
     使用 OMDb API 获取电影信息（替代 IMDb 网页抓取）。
@@ -77,16 +107,6 @@ def get_imdb_info(name: str, config: dict) -> Tuple[Optional[str], Optional[str]
     # 多阶段搜索：完整清理标题 → 前3个词 → 原始标题
     search_attempts = [cleaned_title]
     
-    # 1. 尝试修复缺失的撇号 (例如 "Tom Clancys" -> "Tom Clancy's")
-    apostrophe_title = re.sub(r'\b([A-Za-z]{3,})s\b', r"\1's", cleaned_title)
-    if apostrophe_title != cleaned_title:
-        search_attempts.append(apostrophe_title)
-        
-    # 2. 尝试移除高频的干扰性作者前缀 (例如 "Tom Clancys ")
-    no_author_title = re.sub(r'(?i)^tom clancys?\s+', '', cleaned_title).strip()
-    if no_author_title and no_author_title != cleaned_title:
-        search_attempts.append(no_author_title)
-
     words = cleaned_title.split()
     
     if len(words) > 3:
@@ -214,6 +234,44 @@ def get_imdb_info(name: str, config: dict) -> Tuple[Optional[str], Optional[str]
         except Exception as e:
             logger.debug(f"模糊搜索发生异常: {e}")
             continue
+
+    # ==========================================
+    # 5. AI 兜底 (LLM Fallback)
+    # 遇到搜索死角，求助大模型直接返回 IMDb ID 再请求
+    # ==========================================
+    mistral_api_key = config.get("mistral_api_key")
+    if mistral_api_key:
+        logger.debug(f"🤖 常规搜索均失败，尝试使用 AI 推理 '{name}' 的 IMDb ID...")
+        imdb_id = _get_imdb_id_from_ai(name, mistral_api_key, session, timeout)
+        
+        if imdb_id:
+            logger.debug(f"🧠 AI 推理出了 ID: {imdb_id}，正在向 OMDb 验证...")
+            try:
+                time.sleep(random.uniform(
+                    config.get("retry_delay_min", 0.2),
+                    config.get("retry_delay_max", 0.5)
+                ))
+                detail_params = {
+                    "apikey": omdb_api_key,
+                    "i":      imdb_id,
+                    "plot":   "full"
+                }
+                detail_resp = session.get("https://www.omdbapi.com/", params=detail_params, timeout=timeout)
+                detail_resp.raise_for_status()
+                detail_data = detail_resp.json()
+                
+                if detail_data.get("Response") == "True":
+                    rating    = detail_data.get("imdbRating", "N/A")
+                    summary   = detail_data.get("Plot", "No summary available.")
+                    image_url = detail_data.get("Poster", "")
+
+                    if not image_url or image_url == "N/A":
+                        image_url = "https://placehold.co/150x220?text=No+Poster"
+
+                    logger.debug(f"✅ AI 兜底完美命中: '{name}' -> ID: {imdb_id}, 评分={rating}")
+                    return rating, summary, image_url
+            except Exception as e:
+                logger.debug(f"AI 兜底 OMDb 验证异常: {e}")
 
     logger.debug(f"❌ 所有搜索均失败: {name}")
     return None, None, None
