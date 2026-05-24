@@ -150,5 +150,57 @@ def get_imdb_info(name: str, config: dict) -> Tuple[Optional[str], Optional[str]
             logger.debug(f"未知错误 ({type(e).__name__}) [{name}]: {e}")
             return None, None, None
 
+    # ==========================================
+    # 4. 模糊搜索兜底 (Fuzzy Search Fallback)
+    # 应对 BT 种子去掉标点符号（如 Tom Clancys 缺撇号）或添加系列名前缀的情况
+    # ==========================================
+    for fuzzy_title in unique_titles:
+        logger.debug(f"🎯 精确匹配均失败，尝试模糊搜索: '{fuzzy_title}'...")
+        try:
+            delay = random.uniform(
+                config.get("retry_delay_min", 0.2),
+                config.get("retry_delay_max", 0.5)
+            )
+            time.sleep(delay)
+            
+            search_params = {
+                "apikey": omdb_api_key,
+                "s":      fuzzy_title,
+                "type":   "movie"
+            }
+            resp = session.get("https://www.omdbapi.com/", params=search_params, timeout=timeout)
+            resp.raise_for_status()
+            search_data = resp.json()
+            
+            if search_data.get("Response") == "True" and search_data.get("Search"):
+                # 获取最匹配的第一个结果的 imdbID
+                first_match = search_data["Search"][0]
+                imdb_id = first_match.get("imdbID")
+                
+                if imdb_id:
+                    time.sleep(delay)
+                    detail_params = {
+                        "apikey": omdb_api_key,
+                        "i":      imdb_id,
+                        "plot":   "full"
+                    }
+                    detail_resp = session.get("https://www.omdbapi.com/", params=detail_params, timeout=timeout)
+                    detail_resp.raise_for_status()
+                    detail_data = detail_resp.json()
+                    
+                    if detail_data.get("Response") == "True":
+                        rating    = detail_data.get("imdbRating", "N/A")
+                        summary   = detail_data.get("Plot", "No summary available.")
+                        image_url = detail_data.get("Poster", "")
+
+                        if not image_url or image_url == "N/A":
+                            image_url = "https://placehold.co/150x220?text=No+Poster"
+
+                        logger.debug(f"✅ 模糊搜索最终命中: '{fuzzy_title}' -> ID: {imdb_id}, 评分={rating}")
+                        return rating, summary, image_url
+        except Exception as e:
+            logger.debug(f"模糊搜索发生异常: {e}")
+            continue
+
     logger.debug(f"❌ 所有搜索均失败: {name}")
     return None, None, None
