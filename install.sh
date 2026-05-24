@@ -40,9 +40,9 @@ source "$VENV_DIR/bin/activate"
 echo "⬆️  升级 pip 到最新版本..."
 pip install --upgrade pip -q
 
-# 安装依赖（已移除 selenium 和 webdriver-manager）
+# 安装依赖
 echo "📥 安装依赖库..."
-pip install -q requests beautifulsoup4 jinja2 urllib3 playwright
+pip install -r requirements.txt
 
 # 安装 Chromium 浏览器（仅 headless_shell）
 echo "🌐 安装 Chromium 浏览器..."

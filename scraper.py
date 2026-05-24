@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 def extract_title_year(name):
     """Extract title and year from movie name."""
     name = re.sub(r'\.', ' ', name)
-    pattern = r"^(.*?)(?:\s*\((\d{4})\)|\s+(\d{4})\s+)"
+    pattern = r"^(.*?)(?:\s*\((\d{4})\)|\s+(\d{4})(?:\s|$|\.))"
     match = re.search(pattern, name)
     if match:
         title = match.group(1).strip()

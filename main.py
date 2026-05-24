@@ -72,35 +72,43 @@ def main():
         failed_movies = []
         
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            # 使用列表保存原始顺序，并在 future_to_movie 中存储索引和名称
             future_to_movie = {
-                executor.submit(get_info_for_movie, name, config): name 
-                for name in movie_list
+                executor.submit(get_info_for_movie, name, config): (i, name)
+                for i, name in enumerate(movie_list)
             }
             
             completed = 0
             total = len(movie_list)
             
-            for future in future_to_movie:
-                name = future_to_movie[future]
+            # 预先分配列表以保持原始顺序
+            results_ordered = [None] * total
+            
+            from concurrent.futures import as_completed
+            for future in as_completed(future_to_movie):
+                idx, name = future_to_movie[future]
                 completed += 1
                 print(f"\r正在获取 IMDb 信息: {completed}/{total} ({completed*100//total}%)", end='', flush=True)
                 
                 try:
                     result = future.result()
                     if result:
-                        name, rating, summary, image_url = result
-                        raw_results.append({
+                        _, rating, summary, image_url = result
+                        results_ordered[idx] = {
                             'name': name,
                             'rating': rating,
                             'summary_en': summary,
                             'image_url': image_url
-                        })
-                        summaries_to_translate.append(summary)
+                        }
                     else:
                         failed_movies.append(name)
                 except Exception as exc:
                     logger.error(f'\n电影 {name} 处理异常: {type(exc).__name__}')
                     failed_movies.append(name)
+
+        # 过滤掉 None 的结果，保留有效数据和顺序
+        raw_results = [r for r in results_ordered if r is not None]
+        summaries_to_translate = [r['summary_en'] for r in raw_results]
 
         print()  # 换行
         valid_movies_count = len(raw_results)
