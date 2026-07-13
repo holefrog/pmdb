@@ -156,7 +156,7 @@ request_timeout: 15    # 网络超时（秒）
 | 变量 | 配置値 | 说明 |
 |------|--------|------|
 | `deploy_user` | `david` | 部署目标用户 |
-| `deploy_dir` | `/home/david/Programs/Agent_Movie` | 程序安装目录（venv、config.ini 均在此目录下） |
+| `deploy_dir` | `/home/david/Programs/PMDB` | 程序安装目录（venv、config.ini 均在此目录下） |
 | `pmdb_venv_dir` | `{{ deploy_dir }}/venv` | Python 虚拟环境路径 |
 | `pmdb_config_output` | `{{ deploy_dir }}/config.ini` | 生成的配置文件路径 |
 
