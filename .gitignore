@@ -24,6 +24,7 @@ config.ini
 
 # secrets
 ansible/secrets.yml
+secrets.yml
 
 # output
 output.html
