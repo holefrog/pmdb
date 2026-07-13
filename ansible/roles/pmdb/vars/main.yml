@@ -40,8 +40,8 @@ max_workers: 10
 max_movies: 100
 # 每批翻译文本数量
 mistral_batch_size: 10
-# 网络请求超时时间（秒）
-request_timeout: 10
+# 网络请求超时时间（秒，建议给大模型留出更长时间）
+request_timeout: 60
 # 请求延迟范围（秒，避免触发反爬虫）
 retry_delay_min: 0.2
 retry_delay_max: 0.5
