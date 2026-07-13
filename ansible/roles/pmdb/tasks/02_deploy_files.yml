@@ -10,16 +10,10 @@
 - name: 复制 Python 程序文件
   copy:
     src: "{{ item }}"
-    dest: "{{ deploy_dir }}/{{ item }}"
+    dest: "{{ deploy_dir }}/{{ item | basename }}"
     mode: "0644"
-  loop:
-    - main.py
-    - scraper.py
-    - movie_api_service.py
-    - translate_service.py
-    - config_reader.py
-    - html_generator.py
-    - retry.py
+  with_fileglob:
+    - "*.py"
 
 - name: 复制 requirements.txt
   copy:
