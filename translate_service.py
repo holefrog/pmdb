@@ -15,6 +15,12 @@ import requests
 from abc import ABC, abstractmethod
 from typing import List, Optional
 
+try:
+    from retry import with_retry
+    _HAS_RETRY = True
+except ImportError:
+    _HAS_RETRY = False
+
 logger = logging.getLogger(__name__)
 
 
@@ -97,6 +103,12 @@ class OpenAICompatibleTranslator(AbstractTranslator):
         self.model = model
         self.endpoint = endpoint
         self.timeout = timeout
+        self._retry_cfg = {
+            "max_retries": 3,
+            "base_delay": 5.0,
+            "backoff_factor": 2.0,
+            "max_delay": 60.0,
+        }
 
     def _translate_batch(self, texts: List[str]) -> List[str]:
         prompt = (
@@ -121,13 +133,19 @@ class OpenAICompatibleTranslator(AbstractTranslator):
             "response_format": {"type": "json_object"},
             "temperature": 0.3,
         }
-        resp = requests.post(
-            self.endpoint, headers=headers, json=payload, timeout=self.timeout
-        )
-        resp.raise_for_status()
-        content = resp.json()["choices"][0]["message"]["content"]
-        parsed = json.loads(content)
-        return parsed.get("translations", [])
+
+        def _do_request():
+            resp = requests.post(
+                self.endpoint, headers=headers, json=payload, timeout=self.timeout
+            )
+            resp.raise_for_status()
+            content = resp.json()["choices"][0]["message"]["content"]
+            parsed = json.loads(content)
+            return parsed.get("translations", [])
+
+        if _HAS_RETRY:
+            return with_retry(_do_request, self._retry_cfg, label=f"{self.model}")
+        return _do_request()
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -146,6 +164,12 @@ class GeminiTranslator(AbstractTranslator):
         self.api_key = api_key
         self.model = model
         self.timeout = timeout
+        self._retry_cfg = {
+            "max_retries": 3,
+            "base_delay": 5.0,
+            "backoff_factor": 2.0,
+            "max_delay": 60.0,
+        }
 
     def _translate_batch(self, texts: List[str]) -> List[str]:
         prompt = (
@@ -159,12 +183,18 @@ class GeminiTranslator(AbstractTranslator):
             "contents": [{"parts": [{"text": prompt}]}],
             "generationConfig": {"responseMimeType": "application/json"},
         }
-        resp = requests.post(url, json=payload, timeout=self.timeout)
-        resp.raise_for_status()
-        data = resp.json()
-        text = data["candidates"][0]["content"]["parts"][0]["text"]
-        parsed = json.loads(text)
-        return parsed.get("translations", [])
+
+        def _do_request():
+            resp = requests.post(url, json=payload, timeout=self.timeout)
+            resp.raise_for_status()
+            data = resp.json()
+            text = data["candidates"][0]["content"]["parts"][0]["text"]
+            parsed = json.loads(text)
+            return parsed.get("translations", [])
+
+        if _HAS_RETRY:
+            return with_retry(_do_request, self._retry_cfg, label=f"gemini/{self.model}")
+        return _do_request()
 
 
 # ─────────────────────────────────────────────────────────────────────────────
