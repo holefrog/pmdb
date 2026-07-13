@@ -1,8 +1,8 @@
 import sys
 import logging
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from config_reader import read_config
-from translate_service import translate_texts   # 替代旧 mistral_service
+from config_reader import CONFIG
+from translate_service import translate_texts
 from scraper import get_top100_with_fallback
 from movie_api_service import get_imdb_info
 from html_generator import generate_html
@@ -24,9 +24,9 @@ def setup_logging():
 logger = logging.getLogger(__name__)
 
 
-def _fetch_movie(name: str, config: dict):
+def _fetch_movie(name: str):
     """线程工作函数：获取单部电影的 IMDb 信息。"""
-    rating, summary, image_url = get_imdb_info(name, config)
+    rating, summary, image_url = get_imdb_info(name)
     if rating and summary and image_url:
         return name, rating, summary, image_url
     return None
@@ -39,21 +39,16 @@ def main():
         logger.info("PMDB - 个人电影数据库工具 启动")
         logger.info("=" * 60)
 
-        # ── 步骤 1：读取配置 ─────────────────────────────────────
-        logger.info("\n[步骤 1/4] 加载配置文件...")
-        config = read_config()
-        if not config:
-            logger.error("❌ 配置加载失败，程序退出")
-            return
-
-        max_workers  = config["max_workers"]
-        max_movies   = config["max_movies"]
-        batch_size   = config["mistral_batch_size"]
-        provider     = config["translate_provider"]
+        # ── 步骤 1：读取配置（在 import 时已完成校验） ─────────────
+        logger.info("\n[步骤 1/4] 加载配置文件 (已通过模块自动加载并校验)...")
+        max_workers  = CONFIG["max_workers"]
+        max_movies   = CONFIG["max_movies"]
+        batch_size   = CONFIG["mistral_batch_size"]
+        provider     = CONFIG["translate_provider"]
 
         # ── 步骤 2：获取电影列表 ─────────────────────────────────
         logger.info("\n[步骤 2/4] 从 BT 站获取电影列表（支持多源 Fallback）...")
-        movie_list = get_top100_with_fallback(config)
+        movie_list = get_top100_with_fallback()
 
         if not movie_list:
             logger.error("❌ 无法获取电影列表，程序退出")
@@ -74,7 +69,7 @@ def main():
 
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             future_to_idx = {
-                executor.submit(_fetch_movie, name, config): (i, name)
+                executor.submit(_fetch_movie, name): (i, name)
                 for i, name in enumerate(movie_list)
             }
             for future in as_completed(future_to_idx):
@@ -121,7 +116,7 @@ def main():
         # ── 步骤 4：批量翻译 ─────────────────────────────────────
         logger.info(f"\n[步骤 4/4] 使用 {provider} 批量翻译简介...")
         summaries_en = [r['summary_en'] for r in raw_results]
-        chinese_summaries = translate_texts(summaries_en, config, batch_size)
+        chinese_summaries = translate_texts(summaries_en, batch_size)
 
         if len(chinese_summaries) != valid_count:
             logger.error("❌ 翻译结果数量不匹配，程序退出")

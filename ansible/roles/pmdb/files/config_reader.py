@@ -5,7 +5,7 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-def read_config(config_file: str = "config.ini") -> dict:
+def _load_config(config_file: str = "config.ini") -> dict:
     """
     读取 config.ini（由 Ansible 从 ansible/secrets.yml + config.ini.j2 生成）并返回配置字典。
     禁止使用任何 fallback。如果有配置缺失，直接抛出错误并退出程序。
@@ -117,3 +117,6 @@ def read_config(config_file: str = "config.ini") -> dict:
     except Exception as e:
         logger.error(f"❌ 加载配置时发生未知错误: {type(e).__name__} - {e}")
         sys.exit(1)
+
+CONFIG = _load_config()
+

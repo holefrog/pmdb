@@ -6,6 +6,7 @@ import logging
 from typing import Tuple, Optional, List
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
+from config_reader import CONFIG
 
 # OMDb API 版本 - 替代 IMDb 网页抓取
 # IMDb 已改为纯 JS 渲染，requests 直接请求只能拿到空壳 HTML
@@ -148,18 +149,17 @@ def _build_search_queries(title: str, year: Optional[str]) -> List[Tuple[str, Op
 
 def _get_ai_imdb_id(
     name: str,
-    config: dict,
     session: requests.Session,
     timeout: int
 ) -> Optional[str]:
     """使用配置的 AI 服务推理 IMDb ID（AI 兜底查询）。"""
     # AI 兜底固定用 Mistral（最稳定，有 JSON mode）
-    api_key = config["mistral_api_key"]
+    api_key = CONFIG["mistral_api_key"]
     if not api_key:
         return None
 
-    model = config["imdb_lookup_model"]
-    endpoint = config["mistral_endpoint"]
+    model = CONFIG["imdb_lookup_model"]
+    endpoint = CONFIG["mistral_endpoint"]
     prompt = (
         f"Find the official IMDb ID for the movie currently titled '{name}'. "
         "Note: This title might contain extra franchise names, incorrect release years, "
