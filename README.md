@@ -2,20 +2,20 @@
 
 ---
 
-# 📽️ PMDB - 个人电影数据库工具 (Personal Movie Database Tool)
+# 📽️ PMDB - 个人电影数据库工具
 
-[![Python Version](https://img.shields.io/badge/python-3.7%2B-blue)](https://www.python.org/)
+[![Python Version](https://img.shields.io/badge/python-3.8%2B-blue)](https://www.python.org/)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
-## 📖 简介 (Introduction)
+## 📖 简介
 
-`pmdb` 是一个 **自动化电影信息收集与展示工具**，它的工作流程如下：
+`pmdb` 是一个**自动化电影信息收集与展示工具**，工作流程如下：
 
-- 🎯 **智能抓取**：使用 `Playwright` 从 The Pirate Bay 获取最新的 Top 100 热门电影列表。
-- 🔍 **精准查询**：调用 `OMDb API` 自动获取电影详细信息（包括评分、英文简介、海报图），替代了不稳定的直接网页解析。
-- 🌐 **批量翻译**：接入 `Mistral API` 大语言模型，将英文简介批量且准确地翻译为中文。
-- 📄 **美观呈现**：基于 `Jinja2` 模板引擎，生成包含海报、双语简介和评分的精美 HTML 电影展示页面。
-- ⚡ **高效并发**：采用多线程并行处理，显著缩短数据获取时间。
+- 🎯 **多源抓取**：使用 `Playwright` 从 The Pirate Bay 等多个备用镜像获取 Top 100 热门电影，支持自动 Fallback。
+- 🔍 **智能查询**：调用 `OMDb API` 获取电影详情（评分、简介、海报），多阶段搜索策略（精确 → 模糊 → AI 兜底）。
+- 🌐 **多AI翻译**：支持 Mistral / OpenAI / Groq / Nvidia / Gemini 五大提供商，通过配置一键切换。
+- 📄 **美观呈现**：基于 `Jinja2` 模板生成含海报、双语简介和评分的精美 HTML。
+- ⚡ **高效并发**：多线程并行处理，显著缩短数据获取时间。
 
 ---
 
@@ -23,28 +23,31 @@
 
 | 特性 | 说明 |
 |------|------|
-| **稳定爬取** | 使用 Playwright 无头浏览器模拟真实访问，轻松应对简单反爬。 |
-| **可靠数据源** | 全面切换至 OMDb API 替代 IMDb 网页直爬，数据结构化且不易失效。 |
-| **智能翻译** | 借助 Mistral 大模型进行批量翻译，不仅准确度高，还大幅减少 API 调用次数。 |
-| **并行处理** | 支持自定义多线程并发数，大幅提升电影详情的获取速度。 |
-| **模块化设计** | 职责分离清晰（爬虫、API 服务、翻译、渲染），方便二次开发和维护。 |
+| **多源 Fallback** | 内置 TPB 镜像列表，源站宕机自动降级，无需人工干预 |
+| **智能去重** | 大小写无关 + `&`/`And` 标准化，避免同部电影重复 |
+| **多阶段搜索** | 精确匹配 → 年份±1 → 模糊搜索 → AI 推理，命中率最大化 |
+| **多AI翻译** | 5 大提供商可配置，secrets.yml 中一键切换 |
+| **安全配置** | API 密钥存 secrets.yml，Ansible 渲染生成 config.ini，不进版本控制 |
 
 ---
 
-## 📦 依赖 (Dependencies)
+## 📦 依赖
 
-本项目需要 **Python 3.7+**，主要依赖库包括：
-
-- `playwright` (用于网页自动化抓取)
-- `requests` (用于 API 请求)
-- `beautifulsoup4` (用于 HTML 解析)
-- `jinja2` (用于 HTML 模板渲染)
-
-> 💡 **注意**：项目采用 Playwright 替代了早期的 Selenium，更加轻量稳定！
+- Python 3.8+
+- `playwright`、`requests`、`beautifulsoup4`、`jinja2`
 
 ---
 
-## 🚀 快速开始 (Quick Start)
+## 🚀 快速开始
+
+### 前置要求
+
+```bash
+# 安装 Ansible
+pip install ansible
+# 或
+sudo apt-get install ansible
+```
 
 ### 1️⃣ 克隆项目
 
@@ -53,118 +56,105 @@ git clone https://github.com/your-repo/pmdb.git
 cd pmdb
 ```
 
-### 2️⃣ 运行安装脚本
+### 2️⃣ 配置密钥
 
 ```bash
-chmod +x *.sh
-./install.sh
+cp secrets.yml.example secrets.yml
+# 填入你的 API 密钥
+vim secrets.yml
 ```
 
-**安装脚本会自动：**
-- 在项目本地创建 `venv` 虚拟环境。
-- 安装所有必要的 Python 依赖包。
-- 安装 Playwright 所需的 Chromium 浏览器内核（若官方版安装失败，程序运行时会自动寻找系统自带的 Chrome/Chromium）。
-
-### 3️⃣ 获取并配置 API 密钥
-
-本项目需要两个 API 密钥才能正常工作：
-1. **OMDb API 密钥**：获取电影详情。[免费注册 OMDb Key](https://www.omdbapi.com/apikey.aspx)（每日 1000 次免费额度）。
-2. **Mistral API 密钥**：用于文本翻译。[注册 Mistral AI](https://console.mistral.ai/)。
-
-复制配置模板并进行编辑：
+### 3️⃣ 运行 Ansible 部署
 
 ```bash
-cp config.ini.example config.ini
+ansible-playbook ansible/playbook.yml -e @secrets.yml
 ```
 
-在 `config.ini` 中填入你的密钥：
-
-```ini
-[Mistral]
-api_key_mistral="<YOUR_MISTRAL_API_KEY>"
-
-[OMDb_API]
-OMDB_KEY="<YOUR_OMDB_API_KEY>"
-```
+部署会自动：创建 venv、安装依赖、安装 Chromium、生成 config.ini。
 
 ### 4️⃣ 运行程序
 
 ```bash
-./pmdb.sh
-```
-
-脚本将自动激活虚拟环境并执行主程序 `main.py`。运行完成后，将在浏览器中自动打开生成的 `output.html`。
-
----
-
-## ⚙️ 配置说明 (Configuration)
-
-你可以通过修改 `config.ini` 来自定义程序的运行行为，无需修改代码：
-
-```ini
-[Settings]
-# 并行工作线程数（建议 3-10，提升数据抓取速度）
-max_workers=5
-
-# 最大处理电影数量
-max_movies=100
-
-# Mistral 每批翻译文本数量（建议 10-50）
-mistral_batch_size=10
-
-# 网络请求超时时间（秒）
-request_timeout=10
+./run.sh
 ```
 
 ---
 
-## 📂 项目结构 (Project Structure)
+## ⚙️ 配置说明
+
+所有配置均在 `secrets.yml` 中管理，部署后生成 `config.ini`：
+
+```yaml
+# 翻译提供商（mistral / openai / groq / nvidia / gemini）
+translate_provider: "mistral"
+
+# 各提供商 API 密钥（填写你使用的）
+mistral_api_key: "YOUR_KEY"
+openai_api_key: ""
+groq_api_key: ""
+nvidia_api_key: ""
+gemini_api_key: ""
+
+# OMDb API 密钥（免费注册：https://www.omdbapi.com/apikey.aspx）
+omdb_api_key: "YOUR_KEY"
+
+# 运行参数
+max_workers: 10
+max_movies: 100
+```
+
+---
+
+## 📂 项目结构
 
 ```
 pmdb/
-├── main.py              # 主程序入口，统筹各模块
-├── scraper.py           # 抓取模块 (Playwright + The Pirate Bay)
-├── movie_api_service.py # 电影详情获取模块 (OMDb API)
-├── mistral_service.py   # 翻译服务模块 (Mistral API)
-├── html_generator.py    # HTML 生成模块 (Jinja2)
-├── config_reader.py     # 配置文件解析模块
-├── template.html        # HTML 渲染模板
-├── config.ini.example   # 配置文件模板
-├── pmdb.sh              # 运行脚本
-├── install.sh           # 安装脚本
-├── README.md            # 项目说明
-└── .gitignore           # Git 忽略配置
+├── ansible/
+│   ├── playbook.yml                # 主 Playbook
+│   ├── inventory/hosts.ini         # 本地清单
+│   └── roles/pmdb/
+│       ├── tasks/main.yml          # 部署任务
+│       ├── templates/config.ini.j2 # 配置模板
+│       └── vars/main.yml           # 角色变量
+├── secrets.yml                     # ⚠️ 真实密钥（.gitignore）
+├── secrets.yml.example             # ✅ 示例（提交）
+├── config.ini                      # ⚠️ Ansible 生成（.gitignore）
+├── run.sh                          # 运行脚本
+├── main.py                         # 主程序入口
+├── scraper.py                      # 抓取模块（多源 Fallback）
+├── movie_api_service.py            # OMDb 查询（多变体搜索）
+├── translate_service.py            # 多AI翻译服务
+├── config_reader.py                # 配置文件解析
+├── html_generator.py               # HTML 生成
+└── requirements.txt
 ```
 
 ---
 
-## ❓ 常见问题 (FAQ)
+## ❓ 常见问题
 
-### Q1: 提示 Playwright Chromium 安装失败怎么办？
-**A**: `install.sh` 如果在下载 Chromium 时遇到网络或系统兼容性问题，脚本会继续执行。`scraper.py` 已经做了兼容，会自动尝试寻找您 Linux 系统中安装的 `google-chrome` 或 `chromium-browser`。您也可以手动安装 Chrome。
+**Q: Playwright Chromium 安装失败？**
+`scraper.py` 会自动寻找系统中的 `google-chrome` 或 `chromium-browser`。
 
-### Q2: 为什么有些电影在 HTML 中没有显示，或者控制台提示"未找到"？
-**A**: 
-1. 电影名称不规范或缺少年份。
-2. OMDb 数据库中确实未收录该影片。
-程序设计了容错机制，会自动跳过这些无法获取信息的电影并继续处理后续列表。
+**Q: 某些电影找不到信息？**
+程序有四阶段搜索（精确 → 年份±1 → 模糊 → AI 兜底），找不到的会自动跳过。
 
-### Q3: 翻译结果数量不匹配或翻译报错？
-**A**: 请检查网络连接以及 Mistral API 的配额。如果文本过长，你可以尝试在 `config.ini` 中减小 `mistral_batch_size`。
+**Q: 如何切换翻译提供商？**
+修改 `secrets.yml` 中的 `translate_provider`，重新运行 Ansible 即可。
 
 ---
 
-## 🤝 贡献 (Contributing)
+## 🤝 贡献
 
 欢迎提交 Issue 和 Pull Request！
 
-**待办事项 (TODO)**：
-- [ ] 支持本地缓存避免对同一部电影重复调用 OMDb API
-- [ ] 增加豆瓣 API 或 TMDB 等备用数据源
-- [ ] 支持将数据导出为 CSV / JSON 格式
+**TODO**：
+- [ ] 本地缓存，避免重复调用 OMDb API
+- [ ] 增加豆瓣/TMDB 等备用数据源
+- [ ] 支持 CSV/JSON 导出
 
 ---
 
-## 📄 许可证 (License)
+## 📄 许可证
 
 [MIT License](LICENSE)

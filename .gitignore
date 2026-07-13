@@ -22,8 +22,14 @@ rpi_keys/*
 # config
 config.ini
 
+# secrets
+secrets.yml
+
 # output
 output.html
+
+# Ansible 生成产物
+*.retry
 
 # ============================================
 # 日志文件
