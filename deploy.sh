@@ -12,7 +12,7 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-SECRETS_FILE="${SCRIPT_DIR}/secrets.yml"
+SECRETS_FILE="${SCRIPT_DIR}/ansible/secrets.yml"
 PLAYBOOK="${SCRIPT_DIR}/ansible/playbook.yml"
 
 # ── 颜色输出 ─────────────────────────────────────────────────
@@ -56,9 +56,9 @@ ok "Ansible: $(ansible --version | head -1)"
 
 # 检查 secrets.yml
 if [ ! -f "${SECRETS_FILE}" ]; then
-    warn "secrets.yml 不存在，正在从模板创建..."
-    cp "${SCRIPT_DIR}/secrets.yml.example" "${SECRETS_FILE}"
-    warn "请先编辑 secrets.yml 填入 API 密钥，然后重新运行 deploy.sh"
+    warn "ansible/secrets.yml 不存在，正在从模板创建..."
+    cp "${SCRIPT_DIR}/ansible/secrets.yml.example" "${SECRETS_FILE}"
+    warn "请先编辑 ansible/secrets.yml 填入 API 密钥，然后重新运行 deploy.sh"
     echo ""
     echo "  vim ${SECRETS_FILE}"
     echo ""
@@ -68,7 +68,7 @@ ok "secrets.yml: ${SECRETS_FILE}"
 
 # 基本校验：确保不是未填写的占位符
 if grep -q "<YOUR_" "${SECRETS_FILE}"; then
-    warn "secrets.yml 中仍有未填写的占位符（<YOUR_...>）"
+    warn "ansible/secrets.yml 中仍有未填写的占位符（<YOUR_...>）"
     warn "请编辑后重新运行: vim ${SECRETS_FILE}"
     exit 1
 fi
