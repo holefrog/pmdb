@@ -337,3 +337,59 @@ def get_imdb_info(
 
     logger.debug(f"❌ 所有搜索均失败: {name}")
     return None, None, None
+
+
+from concurrent.futures import ThreadPoolExecutor, as_completed
+
+def _fetch_single_movie(name: str) -> Optional[Tuple[str, str, str, str]]:
+    """线程工作函数：获取单部电影的 IMDb 信息。"""
+    rating, summary, image_url = get_imdb_info(name)
+    if rating and summary and image_url:
+        return name, rating, summary, image_url
+    return None
+
+
+def fetch_imdb_info_batch(movie_list: List[str]) -> Tuple[List[dict], List[str]]:
+    """
+    并行获取一批电影的 OMDb 信息。
+    返回 (成功的结果列表, 失败的电影名称列表)
+    """
+    max_workers = CONFIG["max_workers"]
+    total = len(movie_list)
+    results_ordered = [None] * total
+    failed_movies = []
+    completed = 0
+
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        future_to_idx = {
+            executor.submit(_fetch_single_movie, name): (i, name)
+            for i, name in enumerate(movie_list)
+        }
+        for future in as_completed(future_to_idx):
+            i, name = future_to_idx[future]
+            completed += 1
+            print(
+                f"\r正在获取 OMDb 信息: {completed}/{total} "
+                f"({completed * 100 // total}%)",
+                end='', flush=True
+            )
+            try:
+                result = future.result()
+                if result:
+                    _, rating, summary, image_url = result
+                    results_ordered[i] = {
+                        'name': name,
+                        'rating': rating,
+                        'summary_en': summary,
+                        'image_url': image_url,
+                    }
+                else:
+                    failed_movies.append(name)
+            except Exception as exc:
+                logger.error(f'\n电影 {name} 处理异常: {type(exc).__name__}')
+                failed_movies.append(name)
+
+    print()  # 换行
+
+    raw_results = [r for r in results_ordered if r is not None]
+    return raw_results, failed_movies

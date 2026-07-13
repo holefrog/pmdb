@@ -1,10 +1,9 @@
 import sys
 import logging
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from config_reader import CONFIG
 from translate_service import translate_texts
 from scraper import get_top100_with_fallback
-from movie_api_service import get_imdb_info
+from movie_api_service import fetch_imdb_info_batch
 from html_generator import generate_html
 
 
@@ -24,14 +23,6 @@ def setup_logging():
 logger = logging.getLogger(__name__)
 
 
-def _fetch_movie(name: str):
-    """线程工作函数：获取单部电影的 IMDb 信息。"""
-    rating, summary, image_url = get_imdb_info(name)
-    if rating and summary and image_url:
-        return name, rating, summary, image_url
-    return None
-
-
 def main():
     try:
         setup_logging()
@@ -41,10 +32,9 @@ def main():
 
         # ── 步骤 1：读取配置（在 import 时已完成校验） ─────────────
         logger.info("\n[步骤 1/4] 加载配置文件 (已通过模块自动加载并校验)...")
-        max_workers  = CONFIG["max_workers"]
-        max_movies   = CONFIG["max_movies"]
-        batch_size   = CONFIG["mistral_batch_size"]
-        provider     = CONFIG["translate_provider"]
+        max_movies = CONFIG["max_movies"]
+        batch_size = CONFIG["mistral_batch_size"]
+        provider   = CONFIG["translate_provider"]
 
         # ── 步骤 2：获取电影列表 ─────────────────────────────────
         logger.info("\n[步骤 2/4] 从 BT 站获取电影列表（支持多源 Fallback）...")
@@ -58,54 +48,18 @@ def main():
             logger.info(f"电影列表过长，仅处理前 {max_movies} 部")
             movie_list = movie_list[:max_movies]
 
-        total = len(movie_list)
-
         # ── 步骤 3：并行获取 IMDb 信息 ───────────────────────────
-        logger.info(f"\n[步骤 3/4] 并行获取 {total} 部电影的 OMDb 信息（线程数: {max_workers}）...")
+        logger.info(f"\n[步骤 3/4] 开始并行获取 {len(movie_list)} 部电影的 OMDb 信息...")
+        
+        raw_results, failed_movies = fetch_imdb_info_batch(movie_list)
 
-        results_ordered = [None] * total
-        failed_movies = []
-        completed = 0
-
-        with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            future_to_idx = {
-                executor.submit(_fetch_movie, name): (i, name)
-                for i, name in enumerate(movie_list)
-            }
-            for future in as_completed(future_to_idx):
-                i, name = future_to_idx[future]
-                completed += 1
-                print(
-                    f"\r正在获取 OMDb 信息: {completed}/{total} "
-                    f"({completed * 100 // total}%)",
-                    end='', flush=True
-                )
-                try:
-                    result = future.result()
-                    if result:
-                        _, rating, summary, image_url = result
-                        results_ordered[i] = {
-                            'name': name,
-                            'rating': rating,
-                            'summary_en': summary,
-                            'image_url': image_url,
-                        }
-                    else:
-                        failed_movies.append(name)
-                except Exception as exc:
-                    logger.error(f'\n电影 {name} 处理异常: {type(exc).__name__}')
-                    failed_movies.append(name)
-
-        print()  # 换行
-
-        raw_results = [r for r in results_ordered if r is not None]
         valid_count = len(raw_results)
-
         if not raw_results:
             logger.error("❌ 未能获取任何有效电影信息")
             return
 
-        logger.info(f"✅ 成功获取 {valid_count}/{total} 部电影信息")
+        logger.info(f"✅ 成功获取 {valid_count}/{len(movie_list)} 部电影信息")
+        
         if failed_movies:
             logger.warning(f"\n⚠️ 以下 {len(failed_movies)} 部电影未找到信息：")
             for movie in failed_movies[:10]:
