@@ -1,0 +1,42 @@
+---
+# tasks/03_venv_and_deps.yml — Python 虚拟环境 + 依赖安装 + Playwright
+
+# ── 虚拟环境 ─────────────────────────────────────────────────
+- name: 删除旧虚拟环境（force_venv_recreate=true 时）
+  file:
+    path: "{{ pmdb_venv_dir }}"
+    state: absent
+  when: force_venv_recreate | default(false) | bool
+
+- name: 创建 Python 虚拟环境（已存在则跳过）
+  command: python3 -m venv "{{ pmdb_venv_dir }}"
+  args:
+    creates: "{{ pmdb_venv_dir }}/bin/python"
+
+# ── Python 依赖 ───────────────────────────────────────────────
+- name: 升级 pip
+  pip:
+    name: pip
+    state: latest
+    virtualenv: "{{ pmdb_venv_dir }}"
+
+- name: 安装项目依赖（requirements.txt）
+  pip:
+    requirements: "{{ deploy_dir }}/requirements.txt"
+    virtualenv: "{{ pmdb_venv_dir }}"
+    state: present
+
+# ── Playwright Chromium ───────────────────────────────────────
+# scraper.py 运行时若启动失败会自动 fallback 到系统 Chrome
+- name: 安装 Playwright Chromium
+  command: "{{ pmdb_venv_dir }}/bin/python -m playwright install chromium"
+  register: playwright_chromium
+  failed_when: false
+  changed_when: playwright_chromium.rc == 0
+
+- name: 显示 Playwright 安装结果
+  debug:
+    msg: >-
+      {{ '✅ Playwright Chromium 安装成功'
+         if playwright_chromium.rc == 0
+         else '⚠️  Playwright Chromium 安装失败，运行时将尝试系统 Chrome/Chromium' }}

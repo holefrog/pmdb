@@ -1,0 +1,40 @@
+---
+# tasks/02_deploy_files.yml — 创建目标目录并复制程序文件
+
+- name: 创建目标目录
+  file:
+    path: "{{ deploy_dir }}"
+    state: directory
+    mode: "0755"
+
+- name: 复制 Python 程序文件
+  copy:
+    src: "{{ item }}"
+    dest: "{{ deploy_dir }}/{{ item }}"
+    mode: "0644"
+  loop:
+    - main.py
+    - scraper.py
+    - movie_api_service.py
+    - translate_service.py
+    - config_reader.py
+    - html_generator.py
+    - retry.py
+
+- name: 复制 requirements.txt
+  copy:
+    src: requirements.txt
+    dest: "{{ deploy_dir }}/requirements.txt"
+    mode: "0644"
+
+- name: 复制输出模板目录（output/template.html + output/template.css）
+  copy:
+    src: output/
+    dest: "{{ deploy_dir }}/output/"
+    mode: "0644"
+
+- name: 复制 run.sh 并设为可执行
+  copy:
+    src: run.sh
+    dest: "{{ pmdb_run_script }}"
+    mode: "0755"

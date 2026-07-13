@@ -1,0 +1,64 @@
+---
+# tasks/01_preflight.yml — 部署前检查：Python、venv、系统依赖、secrets 校验
+
+- name: 检查 Python 3.8+ 是否可用
+  command: >
+    python3 -c "import sys;
+    assert sys.version_info >= (3,8),
+    f'需要 Python 3.8+，当前 {sys.version}'"
+  register: py_check
+  changed_when: false
+  failed_when: py_check.rc != 0
+
+- name: 显示 Python 版本
+  command: python3 --version
+  register: py_version
+  changed_when: false
+
+- debug:
+    msg: "✅ {{ py_version.stdout }}"
+
+- name: 检查 python3-venv 是否可用
+  command: python3 -m venv --help
+  register: venv_available
+  changed_when: false
+  failed_when: false
+
+- name: python3-venv 缺失则终止
+  fail:
+    msg: |
+      ❌ python3-venv 不可用，无法创建虚拟环境。
+      请先安装（需要 sudo）：
+        sudo apt-get install -y python3-venv python3-pip
+      安装后重新运行 ./deploy.sh
+  when: venv_available.rc != 0
+
+- name: 检查 Playwright 系统依赖（libnss3）
+  command: dpkg -s libnss3
+  register: libnss3_check
+  changed_when: false
+  failed_when: false
+
+- name: 提示 Playwright 系统依赖缺失
+  debug:
+    msg: |
+      ⚠️  libnss3 未安装，Playwright 内置 Chromium 可能无法启动。
+      建议（需要 sudo）：
+        sudo apt-get install -y libnss3 libatk1.0-0 libatk-bridge2.0-0 \
+          libcups2 libxcomposite1 libxdamage1 libxrandr2 libgbm1 libxkbcommon0 libasound2
+      或安装 Google Chrome（程序运行时可自动发现）：
+        wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
+        sudo apt install ./google-chrome-stable_current_amd64.deb
+  when: libnss3_check.rc != 0
+
+- name: 校验 secrets.yml 必填字段
+  assert:
+    that:
+      - omdb_api_key is defined and omdb_api_key | length > 0
+      - translate_provider is defined
+      - translate_provider in ['mistral', 'openai', 'groq', 'nvidia', 'gemini']
+    fail_msg: |
+      ❌ secrets.yml 校验失败：
+        - omdb_api_key 不能为空
+        - translate_provider 必须是 mistral / openai / groq / nvidia / gemini 之一
+      参考: secrets.yml.example
