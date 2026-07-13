@@ -226,8 +226,7 @@ def _extract_result(data: dict) -> Tuple[str, str, str]:
 
 
 def get_imdb_info(
-    name: str,
-    config: dict
+    name: str
 ) -> Tuple[Optional[str], Optional[str], Optional[str]]:
     """
     使用 OMDb API 获取电影信息，四阶段搜索策略：
@@ -238,12 +237,11 @@ def get_imdb_info(
 
     Args:
         name: "Title Year" 格式
-        config: read_config() 返回的字典
 
     Returns:
         (rating, summary, image_url) 或 (None, None, None)
     """
-    omdb_api_key = config.get("omdb_api_key")
+    omdb_api_key = CONFIG.get("omdb_api_key")
     if not omdb_api_key:
         logger.error("❌ 未找到 OMDb API 密钥")
         return None, None, None
@@ -258,9 +256,9 @@ def get_imdb_info(
         return None, None, None
 
     session = get_session_with_retries()
-    timeout = config["request_timeout"]
-    delay_min = config["retry_delay_min"]
-    delay_max = config["retry_delay_max"]
+    timeout = CONFIG["request_timeout"]
+    delay_min = CONFIG["retry_delay_min"]
+    delay_max = CONFIG["retry_delay_max"]
 
     def _delay() -> float:
         d = random.uniform(delay_min, delay_max)
@@ -326,7 +324,7 @@ def get_imdb_info(
 
     # ── 阶段 3：AI 推理兜底 ───────────────────────────────────
     logger.debug(f"🤖 所有搜索失败，尝试 AI 兜底: '{name}'")
-    imdb_id = _get_ai_imdb_id(name, config, session, timeout)
+    imdb_id = _get_ai_imdb_id(name, session, timeout)
     if imdb_id:
         try:
             data = _fetch_omdb_by_id(imdb_id, omdb_api_key, session, timeout, _delay())
