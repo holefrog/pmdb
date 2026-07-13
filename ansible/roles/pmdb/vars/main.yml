@@ -4,7 +4,7 @@
 
 # ── 部署目标 ─────────────────────────────────────────────────
 deploy_user: david
-deploy_dir: /home/david/Programs/Agent_Movie
+deploy_dir: /home/david/Programs/PMDB
 
 # ── 衍生路径（基于 deploy_dir 自动计算）─────────────────────
 # Python 虚拟环境路径
