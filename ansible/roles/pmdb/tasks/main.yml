@@ -114,16 +114,10 @@
     dest: "{{ deploy_dir }}/requirements.txt"
     mode: "0644"
 
-- name: 复制 HTML 模板（template.html）
+- name: 复制输出模板目录（output/template.html + output/template.css）
   copy:
-    src: template.html
-    dest: "{{ deploy_dir }}/template.html"
-    mode: "0644"
-
-- name: 复制 logo 图片
-  copy:
-    src: logo.png
-    dest: "{{ deploy_dir }}/logo.png"
+    src: output/
+    dest: "{{ deploy_dir }}/output/"
     mode: "0644"
 
 - name: 复制 run.sh 并设为可执行

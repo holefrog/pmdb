@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>{{ title }}</title>
+    {# CSS 由 html_generator.py 从 template.css 读取后内联注入，output.html 为自包含文件 #}
+    <style>
+{{ styles }}
+    </style>
+    <script>
+        function openImage(url) {
+            window.open(url, '_blank');
+        }
+    </script>
+</head>
+<body>
+    <h1>{{ title }}</h1>
+    <div class="container">
+        {% for movie in movies %}
+        <div class="movie-item">
+            <img src='{{ movie.image_url }}'
+                  alt='{{ movie.name }}'
+                  ondblclick="openImage('{{ movie.image_url }}')">
+            <div class="movie-content">
+                <div class="movie-title">{{ movie.name }}</div>
+
+                {# 评分数值 #}
+                {% set rating_val = movie.rating | float(default=0.0) %}
+
+                {# 计算进度条宽度 (X.X分 = X0% 宽度) #}
+                {% set width_percent = rating_val * 10 %}
+
+                {# 确定颜色等级 #}
+                {% if rating_val >= 8.0 %}
+                    {% set fill_class = 'fill-high' %}
+                    {% set score_color_class = 'rating-high' %}
+                {% elif rating_val >= 7.0 %}
+                    {% set fill_class = 'fill-mid' %}
+                    {% set score_color_class = 'rating-mid' %}
+                {% else %}
+                    {% set fill_class = 'fill-low' %}
+                    {% set score_color_class = 'rating-low' %}
+                {% endif %}
+
+                <div class="rating-display">
+                    <div>评分:</div>
+
+                    <div class="linear-gauge-container">
+                        <div class="linear-gauge-bar {{ fill_class }}" style="width: {{ width_percent }}%;"></div>
+                    </div>
+
+                    <span style="margin-left: 10px;">
+                        <span class="rating-score {{ score_color_class }}">{{ movie.rating }}</span>
+                    </span>
+                </div>
+
+                <p class='summary-cn'>{{ movie.summary_cn }}</p>
+                <p class='summary-en'>{{ movie.summary_en }}</p>
+            </div>
+            <div class="counter">{{ loop.index }}</div>
+        </div>
+        {% endfor %}
+        </div>
+</body>
+</html>
