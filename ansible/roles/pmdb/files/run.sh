@@ -1,9 +1,7 @@
 #!/bin/bash
 # ============================================================
-# PMDB 运行脚本
+# PMDB 运行脚本（由 Ansible 部署到 deploy_dir）
 # 用法：./run.sh
-# 安装目录由 Ansible 的 pmdb_install_dir 决定，
-# 默认与本脚本位于同一目录。
 # ============================================================
 
 set -e
@@ -22,8 +20,7 @@ echo "============================================"
 if [ ! -f "${CONFIG_FILE}" ]; then
     echo "❌ 错误：config.ini 不存在"
     echo "   请先运行 Ansible 部署："
-    echo "   ansible-playbook ansible/playbook.yml -e @secrets.yml"
-    echo "   （自定义目录）-e \"pmdb_install_dir=${INSTALL_DIR}\""
+    echo "   cd /home/david/Coding/pmdb && ./deploy.sh"
     exit 1
 fi
 
@@ -31,7 +28,7 @@ fi
 if [ ! -f "${VENV_DIR}/bin/python" ]; then
     echo "❌ 错误：虚拟环境不存在 (${VENV_DIR})"
     echo "   请先运行 Ansible 部署："
-    echo "   ansible-playbook ansible/playbook.yml -e @secrets.yml"
+    echo "   cd /home/david/Coding/pmdb && ./deploy.sh"
     exit 1
 fi
 

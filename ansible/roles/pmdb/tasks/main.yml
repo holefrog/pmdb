@@ -1,5 +1,13 @@
 ---
 # ansible/roles/pmdb/tasks/main.yml
+#
+# 部署逻辑基于项目实际运行需求：
+#  - scraper.py    → Playwright（需 Chromium + 系统图形库）
+#  - translate_service.py → requests + 各 AI API（纯 HTTP）
+#  - movie_api_service.py → requests + OMDb API
+#  - html_generator.py    → jinja2（生成本地 HTML）
+#  - config_reader.py     → configparser（读 config.ini）
+#  - retry.py             → 标准库（指数退避）
 
 # ── 0. 显示部署信息 ──────────────────────────────────────────────────────────
 - name: 显示部署信息
@@ -10,55 +18,86 @@
       - "部署用户: {{ deploy_user }}"
       - "目标目录: {{ deploy_dir }}"
       - "虚拟环境: {{ pmdb_venv_dir }}"
-      - "配置文件: {{ pmdb_config_output }}"
       - "========================================"
 
-# ── 1. 环境检查 ──────────────────────────────────────────────────────────────
-- name: 检查 Python3 是否可用
-  command: python3 --version
-  register: python_version_output
+# ── 1. 检查系统依赖 ──────────────────────────────────────────────────────────
+- name: 检查 Python 3.8+ 是否可用
+  command: python3 -c "import sys; assert sys.version_info >= (3,8), f'需要 Python 3.8+，当前 {sys.version}'"
+  register: py_check
   changed_when: false
-  failed_when: python_version_output.rc != 0
+  failed_when: py_check.rc != 0
 
 - name: 显示 Python 版本
-  debug:
-    msg: "✅ Python 版本: {{ python_version_output.stdout }}"
+  command: python3 --version
+  register: py_version
+  changed_when: false
+- debug:
+    msg: "✅ {{ py_version.stdout }}"
 
+# python3-venv 是 Ubuntu/Debian 上创建虚拟环境的前提
+# 项目在本地运行，使用当前用户权限检查
 - name: 检查 python3-venv 是否可用
   command: python3 -m venv --help
-  register: venv_check
+  register: venv_available
   changed_when: false
   failed_when: false
 
-- name: 提示安装 python3-venv（若缺失）
-  debug:
-    msg: "⚠️ python3-venv 不可用，请手动运行: sudo apt-get install python3-venv python3-pip"
-  when: venv_check.rc != 0
+- name: python3-venv 缺失警告
+  fail:
+    msg: |
+      ❌ python3-venv 不可用，无法创建虚拟环境。
+      请先安装（需要 sudo）：
+        sudo apt-get install -y python3-venv python3-pip
+      安装后重新运行 ./deploy.sh
+  when: venv_available.rc != 0
 
-- name: 验证 secrets.yml 必填字段
+# Playwright 在 Linux 上需要这些系统库（libnss3、libatk 等）
+# 检测是否已安装其中一个关键库作为代理
+- name: 检查 Playwright 系统依赖（libnss3）
+  command: dpkg -s libnss3
+  register: libnss3_check
+  changed_when: false
+  failed_when: false
+
+- name: 提示安装 Playwright 系统依赖（若缺失）
+  debug:
+    msg: |
+      ⚠️  libnss3 未安装，Playwright 内置 Chromium 可能无法启动。
+      建议（需要 sudo）：
+        sudo apt-get install -y libnss3 libatk1.0-0 libatk-bridge2.0-0
+                                libcups2 libxcomposite1 libxdamage1
+                                libxrandr2 libgbm1 libxkbcommon0 libasound2
+      或直接安装 Google Chrome（程序可自动发现）：
+        wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
+        sudo apt install ./google-chrome-stable_current_amd64.deb
+  when: libnss3_check.rc != 0
+
+- name: 验证 secrets.yml 必填字段（omdb_api_key + translate_provider）
   assert:
     that:
       - omdb_api_key is defined and omdb_api_key | length > 0
-      - translate_provider is defined and translate_provider | length > 0
-    fail_msg: >
-      ❌ secrets.yml 缺少必要字段。
-      请确认 secrets.yml 包含 omdb_api_key 和 translate_provider。
+      - translate_provider is defined
+      - translate_provider in ['mistral', 'openai', 'groq', 'nvidia', 'gemini']
+    fail_msg: |
+      ❌ secrets.yml 校验失败：
+        - omdb_api_key 不能为空
+        - translate_provider 必须是 mistral / openai / groq / nvidia / gemini 之一
       参考: secrets.yml.example
 
-# ── 2. 创建目标目录 ──────────────────────────────────────────────────────────
-- name: 确保目标目录存在
+# ── 2. 准备目标目录 ──────────────────────────────────────────────────────────
+- name: 创建目标目录
   file:
     path: "{{ deploy_dir }}"
     state: directory
     mode: "0755"
-    owner: "{{ deploy_user }}"
 
-# ── 3. 复制程序文件到目标目录 ────────────────────────────────────────────────
-- name: 复制 Python 源文件
+# ── 3. 复制程序文件 ──────────────────────────────────────────────────────────
+# 注：Ansible copy 模块从 role 的 files/ 目录查找源文件
+
+- name: 复制 Python 程序文件
   copy:
     src: "{{ item }}"
-    dest: "{{ deploy_dir }}/{{ item | basename }}"
-    owner: "{{ deploy_user }}"
+    dest: "{{ deploy_dir }}/{{ item }}"
     mode: "0644"
   loop:
     - main.py
@@ -68,45 +107,45 @@
     - config_reader.py
     - html_generator.py
     - retry.py
-    - requirements.txt
-    - template.html
 
-- name: 复制静态资源（logo 等）
+- name: 复制 requirements.txt
+  copy:
+    src: requirements.txt
+    dest: "{{ deploy_dir }}/requirements.txt"
+    mode: "0644"
+
+- name: 复制 HTML 模板（template.html）
+  copy:
+    src: template.html
+    dest: "{{ deploy_dir }}/template.html"
+    mode: "0644"
+
+- name: 复制 logo 图片
   copy:
     src: logo.png
     dest: "{{ deploy_dir }}/logo.png"
-    owner: "{{ deploy_user }}"
     mode: "0644"
 
 - name: 复制 run.sh 并设为可执行
   copy:
     src: run.sh
     dest: "{{ pmdb_run_script }}"
-    owner: "{{ deploy_user }}"
     mode: "0755"
 
-# ── 4. 创建/重建虚拟环境 ─────────────────────────────────────────────────────
-- name: 检查虚拟环境是否已存在
-  stat:
-    path: "{{ pmdb_venv_dir }}/bin/python"
-  register: venv_stat
-
-- name: 删除旧虚拟环境（force_venv_recreate=true 时）
+# ── 4. Python 虚拟环境 ───────────────────────────────────────────────────────
+- name: 删除旧虚拟环境（仅当 --extra-vars force_venv_recreate=true 时）
   file:
     path: "{{ pmdb_venv_dir }}"
     state: absent
-  when:
-    - force_venv_recreate | default(false) | bool
-    - venv_stat.stat.exists
+  when: force_venv_recreate | default(false) | bool
 
-- name: 创建 Python 虚拟环境
+- name: 创建 Python 虚拟环境（已存在则跳过）
   command: python3 -m venv "{{ pmdb_venv_dir }}"
   args:
     creates: "{{ pmdb_venv_dir }}/bin/python"
-  changed_when: true
 
-# ── 5. 安装依赖 ──────────────────────────────────────────────────────────────
-- name: 升级 pip 到最新版本
+# ── 5. 安装 Python 依赖 ──────────────────────────────────────────────────────
+- name: 升级 pip（确保能正确解析 requirements）
   pip:
     name: pip
     state: latest
@@ -117,59 +156,62 @@
     requirements: "{{ deploy_dir }}/requirements.txt"
     virtualenv: "{{ pmdb_venv_dir }}"
     state: present
+  register: pip_install
 
 # ── 6. 安装 Playwright Chromium ──────────────────────────────────────────────
-- name: 安装 Playwright Chromium（允许失败，运行时自动寻找系统浏览器）
+# scraper.py 优先使用 Playwright 内置 Chromium；
+# 若安装失败，运行时会自动 fallback 到系统 Chrome/Chromium。
+- name: 安装 Playwright Chromium
   command: "{{ pmdb_venv_dir }}/bin/python -m playwright install chromium"
-  register: playwright_install
-  failed_when: false
-  changed_when: playwright_install.rc == 0
+  register: playwright_chromium
+  failed_when: false   # 失败不中断部署，运行时有 fallback
+  changed_when: playwright_chromium.rc == 0
 
-- name: Playwright 安装状态提示
+- name: 显示 Playwright 安装结果
   debug:
-    msg: >-
-      {% if playwright_install.rc == 0 %}
-      ✅ Playwright Chromium 安装成功
-      {% else %}
-      ⚠️ Playwright Chromium 安装失败（程序将尝试使用系统 Chrome/Chromium）。
-      若运行报错可手动安装：
-      wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
-      sudo apt install ./google-chrome-stable_current_amd64.deb
-      {% endif %}
+    msg: "{{ '✅ Playwright Chromium 安装成功' if playwright_chromium.rc == 0 else '⚠️  Playwright Chromium 安装失败，运行时将尝试系统 Chrome/Chromium' }}"
 
 # ── 7. 生成 config.ini ───────────────────────────────────────────────────────
-- name: 从 secrets.yml 渲染生成 config.ini
+# 从 secrets.yml（Ansible extra vars）+ config.ini.j2 模板渲染生成。
+# mode 0600：仅所有者可读，保护 API 密钥。
+- name: 渲染 config.ini（来自 secrets.yml）
   template:
     src: "{{ pmdb_config_template }}"
     dest: "{{ pmdb_config_output }}"
-    owner: "{{ deploy_user }}"
-    mode: "0600"    # 仅所有者可读写（保护 API 密钥）
-    backup: true    # 旧版本自动备份为 config.ini.~1~
+    mode: "0600"
+    backup: true
 
-# ── 8. 验证配置文件 ──────────────────────────────────────────────────────────
-- name: 验证生成的 config.ini 格式合法
+# ── 8. 验证 config.ini ───────────────────────────────────────────────────────
+# 验证两个必需 section 都存在，捕获模板渲染错误
+- name: 验证 config.ini 包含必需 section
   command: >
-    {{ pmdb_venv_dir }}/bin/python -c
-    "import configparser; c=configparser.ConfigParser();
-    c.read('{{ pmdb_config_output }}');
-    assert 'AI' in c and 'OMDb_API' in c, 'Missing required sections';
-    print('sections:', c.sections())"
-  register: config_validate
+    {{ pmdb_venv_dir }}/bin/python -c "
+    import configparser, sys
+    c = configparser.ConfigParser()
+    c.read('{{ pmdb_config_output }}')
+    missing = [s for s in ['AI', 'OMDb_API', 'Settings'] if s not in c]
+    if missing:
+        print('MISSING:', missing); sys.exit(1)
+    print('OK sections:', list(c.keys()))
+    "
+  register: config_check
   changed_when: false
 
 - name: 显示配置验证结果
   debug:
-    msg: "✅ config.ini 验证通过 → {{ config_validate.stdout }}"
+    msg: "✅ config.ini 验证通过 → {{ config_check.stdout }}"
 
 # ── 9. 完成 ──────────────────────────────────────────────────────────────────
-- name: 部署完成提示
+- name: 部署完成
   debug:
     msg:
       - "========================================"
       - "✅ PMDB 部署完成！"
       - "========================================"
-      - "目标目录: {{ deploy_dir }}"
+      - "目标目录 : {{ deploy_dir }}"
       - "翻译提供商: {{ translate_provider }}"
-      - "运行方式:"
-      - "  cd {{ deploy_dir }} && ./run.sh"
+      - ""
+      - "运行程序："
+      - "  cd {{ deploy_dir }}"
+      - "  ./run.sh"
       - "========================================"
