@@ -17,7 +17,7 @@
     that:
       - omdb_api_key is defined and omdb_api_key | length > 0
       - translate_provider is defined and translate_provider | length > 0
-    fail_msg: |
+    fail_msg: >
       ❌ secrets.yml 缺少必要字段。
       请检查 secrets.yml 是否存在且包含 omdb_api_key 和 translate_provider。
       参考: secrets.yml.example
@@ -46,7 +46,7 @@
     virtualenv: "{{ pmdb_venv_dir }}"
     state: present
 
-- name: 安装 Playwright Chromium（允许失败，程序运行时会尝试系统浏览器）
+- name: 安装 Playwright Chromium（允许失败）
   command: "{{ pmdb_venv_dir }}/bin/python -m playwright install chromium"
   register: playwright_install
   failed_when: false
@@ -66,19 +66,22 @@
   template:
     src: "{{ pmdb_config_template }}"
     dest: "{{ pmdb_config_output }}"
-    mode: "0600"    # 只有所有者可读写（保护 API 密钥）
-    backup: true    # 旧版本自动备份为 config.ini.1
-  notify: "验证 config.ini"
+    mode: "0600"
+    backup: true
 
 # ── 5. 验证配置文件 ──────────────────────────────────────────────────────────
 - name: 验证生成的 config.ini 格式正确
-  command: "{{ pmdb_venv_dir }}/bin/python -c \"import configparser; c=configparser.ConfigParser(); c.read('{{ pmdb_config_output }}'); print('✅ config.ini 解析成功，sections:', c.sections())\""
+  command: >
+    {{ pmdb_venv_dir }}/bin/python -c
+    "import configparser; c=configparser.ConfigParser();
+    c.read('{{ pmdb_config_output }}');
+    print('sections:', c.sections())"
   register: config_validate
   changed_when: false
 
 - name: 显示验证结果
   debug:
-    msg: "{{ config_validate.stdout }}"
+    msg: "✅ config.ini 解析成功，{{ config_validate.stdout }}"
 
 # ── 6. 确保 run.sh 可执行 ────────────────────────────────────────────────────
 - name: 设置 run.sh 执行权限
@@ -98,9 +101,3 @@
       - "虚拟环境: {{ pmdb_venv_dir }}"
       - "配置文件: {{ pmdb_config_output }}"
       - "========================================"
-
-# ── Handlers ─────────────────────────────────────────────────────────────────
-handlers:
-  - name: 验证 config.ini
-    debug:
-      msg: "config.ini 已更新（旧版本已备份）"
