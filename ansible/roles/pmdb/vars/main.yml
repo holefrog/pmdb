@@ -34,10 +34,15 @@ nvidia_translate_model: "meta/llama-3.3-70b-instruct"
 imdb_lookup_model: "mistral-small-latest"
 
 # 运行参数
+# 并行工作线程数（建议 3-10）
 max_workers: 10
+# 最大处理电影数量
 max_movies: 100
+# 每批翻译文本数量
 mistral_batch_size: 10
-request_timeout: 15
+# 网络请求超时时间（秒）
+request_timeout: 10
+# 请求延迟范围（秒，避免触发反爬虫）
 retry_delay_min: 0.2
 retry_delay_max: 0.5
 

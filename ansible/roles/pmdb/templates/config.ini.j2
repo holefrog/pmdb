@@ -8,56 +8,56 @@
 
 [AI]
 # 翻译服务提供商（mistral / openai / groq / nvidia / gemini）
-translate_provider = {{ translate_provider }}
+translate_provider = {{ translate_provider | mandatory }}
 
 # ── API 密钥（来自 ansible/secrets.yml）──────────────────────────────
-mistral_api_key = {{ mistral_api_key }}
-openai_api_key  = {{ openai_api_key }}
-groq_api_key    = {{ groq_api_key }}
-nvidia_api_key  = {{ nvidia_api_key }}
-gemini_api_key  = {{ gemini_api_key }}
+mistral_api_key = {{ mistral_api_key | mandatory }}
+openai_api_key  = {{ openai_api_key | mandatory }}
+groq_api_key    = {{ groq_api_key | mandatory }}
+nvidia_api_key  = {{ nvidia_api_key | mandatory }}
+gemini_api_key  = {{ gemini_api_key | mandatory }}
 
 # ── 各提供商翻译模型 ─────────────────────────────────────────
-gemini_translate_model  = {{ gemini_translate_model }}
-openai_translate_model  = {{ openai_translate_model }}
-mistral_translate_model = {{ mistral_translate_model }}
-groq_translate_model    = {{ groq_translate_model }}
-nvidia_translate_model  = {{ nvidia_translate_model }}
+gemini_translate_model  = {{ gemini_translate_model | mandatory }}
+openai_translate_model  = {{ openai_translate_model | mandatory }}
+mistral_translate_model = {{ mistral_translate_model | mandatory }}
+groq_translate_model    = {{ groq_translate_model | mandatory }}
+nvidia_translate_model  = {{ nvidia_translate_model | mandatory }}
 
 # ── 各提供商 API 端点 ─────────────────────────────────────────
-mistral_endpoint = {{ mistral_endpoint }}
-openai_endpoint  = {{ openai_endpoint }}
-groq_endpoint    = {{ groq_endpoint }}
-nvidia_endpoint  = {{ nvidia_endpoint }}
-gemini_endpoint  = {{ gemini_endpoint }}
+mistral_endpoint = {{ mistral_endpoint | mandatory }}
+openai_endpoint  = {{ openai_endpoint | mandatory }}
+groq_endpoint    = {{ groq_endpoint | mandatory }}
+nvidia_endpoint  = {{ nvidia_endpoint | mandatory }}
+gemini_endpoint  = {{ gemini_endpoint | mandatory }}
 
 # IMDb AI 兜底查询模型（固定使用 Mistral API，需 mistral_api_key）
-imdb_lookup_model = {{ imdb_lookup_model }}
+imdb_lookup_model = {{ imdb_lookup_model | mandatory }}
 
 
 [OMDb_API]
 # OMDb API 密钥
-OMDB_KEY = {{ omdb_api_key }}
+OMDB_KEY = {{ omdb_api_key | mandatory }}
 
 
 [Settings]
 # 并行工作线程数
-max_workers = {{ max_workers }}
+max_workers = {{ max_workers | mandatory }}
 
 # 最大处理电影数量
-max_movies = {{ max_movies }}
+max_movies = {{ max_movies | mandatory }}
 
 # 每批翻译文本数量
-mistral_batch_size = {{ mistral_batch_size }}
+mistral_batch_size = {{ mistral_batch_size | mandatory }}
 
 # 网络请求超时时间（秒）
-request_timeout = {{ request_timeout }}
+request_timeout = {{ request_timeout | mandatory }}
 
 # 请求延迟范围（秒，避免触发反爬虫）
-retry_delay_min = {{ retry_delay_min }}
-retry_delay_max = {{ retry_delay_max }}
+retry_delay_min = {{ retry_delay_min | mandatory }}
+retry_delay_max = {{ retry_delay_max | mandatory }}
 
 
 [Sources]
 # 爬虫来源 URL 列表（逗号分隔，按优先级排序）
-scraper_urls = {% for url in scraper_urls %}{{ url }}{% if not loop.last %},{% endif %}{% endfor %}
+scraper_urls = {% for url in scraper_urls | mandatory %}{{ url }}{% if not loop.last %},{% endif %}{% endfor %}
