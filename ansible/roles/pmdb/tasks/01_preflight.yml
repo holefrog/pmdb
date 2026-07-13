@@ -51,14 +51,14 @@
         sudo apt install ./google-chrome-stable_current_amd64.deb
   when: libnss3_check.rc != 0
 
-- name: 校验 secrets.yml 必填字段
+- name: 校验 ansible/secrets.yml 必填字段
   assert:
     that:
       - omdb_api_key is defined and omdb_api_key | length > 0
       - translate_provider is defined
       - translate_provider in ['mistral', 'openai', 'groq', 'nvidia', 'gemini']
     fail_msg: |
-      ❌ secrets.yml 校验失败：
+      ❌ ansible/secrets.yml 校验失败：
         - omdb_api_key 不能为空
         - translate_provider 必须是 mistral / openai / groq / nvidia / gemini 之一
-      参考: secrets.yml.example
+      参考: ansible/secrets.yml.example

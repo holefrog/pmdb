@@ -26,8 +26,8 @@
 | **多源 Fallback** | 内置 TPB 镜像列表，源站宕机自动降级，无需人工干预 |
 | **智能去重** | 大小写无关 + `&`/`And` 标准化，避免同部电影重复 |
 | **多阶段搜索** | 精确匹配 → 年份±1 → 模糊搜索 → AI 推理，命中率最大化 |
-| **多AI翻译** | 5 大提供商可配置，`secrets.yml` 中一键切换 |
-| **安全配置** | API 密钥存 `secrets.yml`，Ansible 渲染生成 `config.ini`，不进版本控制 |
+| **多AI翻译** | 5 大提供商可配置，`ansible/secrets.yml` 中一键切换 |
+| **安全配置** | API 密钥存 `ansible/secrets.yml`，Ansible 渲染生成 `config.ini`，不进版本控制 |
 
 ---
 
@@ -50,8 +50,8 @@ pmdb/
 │       ├── tasks/main.yml          # 部署任务
 │       ├── templates/config.ini.j2 # 配置模板（Jinja2）
 │       └── vars/main.yml           # 角色变量
-├── secrets.yml                     # ⚠️ 真实密钥（.gitignore，不提交）
-├── secrets.yml.example             # ✅ 密钥示例（提交）
+├── ansible/secrets.yml                     # ⚠️ 真实密钥（.gitignore，不提交）
+├── ansible/secrets.yml.example             # ✅ 密钥示例（提交）
 ├── config.ini                      # ⚠️ Ansible 生成（.gitignore，不提交）
 ├── run.sh                          # 运行脚本
 ├── main.py                         # 主程序入口
@@ -81,18 +81,18 @@ pip install ansible
 ### 1️⃣ 配置密钥
 
 ```bash
-cp secrets.yml.example secrets.yml
-vim secrets.yml   # 填入 API 密钥
+cp ansible/secrets.yml.example ansible/secrets.yml
+vim ansible/secrets.yml   # 填入 API 密钥
 ```
 
 ### 2️⃣ Ansible 部署
 
 ```bash
 # 部署到当前目录（默认）
-ansible-playbook ansible/playbook.yml -e @secrets.yml
+ansible-playbook ansible/playbook.yml -e @ansible/secrets.yml
 
 # 指定安装目录（可选）
-ansible-playbook ansible/playbook.yml -e @secrets.yml -e "deploy_dir=/opt/pmdb"
+ansible-playbook ansible/playbook.yml -e @ansible/secrets.yml -e "deploy_dir=/opt/pmdb"
 ```
 
 部署会自动：创建 venv、安装依赖、安装 Chromium、生成 `config.ini`（权限 0600）。
@@ -107,7 +107,7 @@ ansible-playbook ansible/playbook.yml -e @secrets.yml -e "deploy_dir=/opt/pmdb"
 
 ## ⚙️ 配置说明
 
-所有配置均在 `secrets.yml` 中管理，Ansible 部署后渲染生成 `config.ini`。
+所有配置均在 `ansible/secrets.yml` 中管理，Ansible 部署后渲染生成 `config.ini`。
 
 ### 必填项
 
@@ -168,8 +168,8 @@ request_timeout: 15    # 网络超时（秒）
 |------|:---:|------|
 | `ansible/playbook.yml` | ✅ | 主 Playbook |
 | `ansible/roles/pmdb/templates/config.ini.j2` | ✅ | 配置模板 |
-| `secrets.yml` | ❌ | 真实 API 密钥 |
-| `secrets.yml.example` | ✅ | 密钥示例模板 |
+| `ansible/secrets.yml` | ❌ | 真实 API 密钥 |
+| `ansible/secrets.yml.example` | ✅ | 密钥示例模板 |
 | `config.ini` | ❌ | Ansible 生成，权限 0600 |
 | `venv/` | ❌ | Python 虚拟环境 |
 
@@ -180,8 +180,8 @@ request_timeout: 15    # 网络超时（秒）
 ### 更新 API 密钥 / 切换翻译提供商
 
 ```bash
-vim secrets.yml
-ansible-playbook ansible/playbook.yml -e @secrets.yml
+vim ansible/secrets.yml
+ansible-playbook ansible/playbook.yml -e @ansible/secrets.yml
 ```
 
 ### 监控日志
@@ -202,7 +202,7 @@ grep "translate_provider" config.ini
 
 ```bash
 rm -rf venv/ config.ini
-ansible-playbook ansible/playbook.yml -e @secrets.yml
+ansible-playbook ansible/playbook.yml -e @ansible/secrets.yml
 ```
 
 ---
@@ -221,10 +221,10 @@ pip install ansible
 程序有四阶段搜索（精确 → 年份±1 → 模糊 → AI 兜底），找不到的自动跳过，不影响其他电影。
 
 **Q: 如何切换翻译提供商？**
-修改 `secrets.yml` 中的 `translate_provider` 和对应密钥，重新运行 Ansible 即可。
+修改 `ansible/secrets.yml` 中的 `translate_provider` 和对应密钥，重新运行 Ansible 即可。
 
 **Q: `config.ini` 误删怎么办？**
-重新运行 `ansible-playbook ansible/playbook.yml -e @secrets.yml` 即可重新生成。
+重新运行 `ansible-playbook ansible/playbook.yml -e @ansible/secrets.yml` 即可重新生成。
 
 ---
 

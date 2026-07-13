@@ -2,7 +2,7 @@
 # PMDB 配置文件（由 Ansible 自动生成，请勿手动编辑）
 # 生成时间：{{ ansible_date_time.iso8601 | default('unknown') }}
 # 模板：ansible/roles/pmdb/templates/config.ini.j2
-# 来源：secrets.yml
+# 来源：ansible/secrets.yml
 # 安装目录：{{ deploy_dir }}
 # ============================================================
 
@@ -10,7 +10,7 @@
 # 翻译服务提供商（mistral / openai / groq / nvidia / gemini）
 translate_provider = {{ translate_provider | default('mistral') }}
 
-# ── API 密钥（来自 secrets.yml）──────────────────────────────
+# ── API 密钥（来自 ansible/secrets.yml）──────────────────────────────
 mistral_api_key = {{ mistral_api_key | default('') }}
 openai_api_key  = {{ openai_api_key  | default('') }}
 groq_api_key    = {{ groq_api_key    | default('') }}

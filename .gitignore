@@ -23,7 +23,7 @@ rpi_keys/*
 config.ini
 
 # secrets
-secrets.yml
+ansible/secrets.yml
 
 # output
 output.html

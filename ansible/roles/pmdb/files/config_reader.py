@@ -32,7 +32,7 @@ DEFAULT_SCRAPER_URLS = [
 
 def read_config(config_file: str = "config.ini") -> dict | None:
     """
-    读取 config.ini（由 Ansible 从 secrets.yml + config.ini.j2 生成）并返回配置字典。
+    读取 config.ini（由 Ansible 从 ansible/secrets.yml + config.ini.j2 生成）并返回配置字典。
 
     Sections:
       [AI]       - 翻译提供商、各 API 密钥、各模型名
@@ -46,7 +46,7 @@ def read_config(config_file: str = "config.ini") -> dict | None:
     if not os.path.exists(config_file):
         logger.error(
             f"❌ 配置文件 '{config_file}' 不存在。\n"
-            "   请先运行 Ansible 部署: ansible-playbook ansible/playbook.yml -e @secrets.yml"
+            "   请先运行 Ansible 部署: ansible-playbook ansible/playbook.yml -e @ansible/secrets.yml"
         )
         return None
 
@@ -101,7 +101,7 @@ def read_config(config_file: str = "config.ini") -> dict | None:
             if not active_key or active_key.startswith("<YOUR_"):
                 logger.error(
                     f"⚠️ 翻译提供商 '{provider}' 的 API 密钥无效或未填写\n"
-                    f"   请在 secrets.yml 中填写 {active_key_field}"
+                    f"   请在 ansible/secrets.yml 中填写 {active_key_field}"
                 )
                 return None
             logger.info(f"✅ 翻译提供商: {provider}，密钥已加载")
@@ -122,7 +122,7 @@ def read_config(config_file: str = "config.ini") -> dict | None:
             logger.error(
                 "❌ OMDb API 密钥无效或未填写\n"
                 "   请前往 https://www.omdbapi.com/apikey.aspx 免费注册\n"
-                "   然后在 secrets.yml 中填写 omdb_api_key"
+                "   然后在 ansible/secrets.yml 中填写 omdb_api_key"
             )
             return None
         result['omdb_api_key'] = omdb_key

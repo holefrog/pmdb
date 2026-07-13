@@ -1,7 +1,7 @@
 ---
 # tasks/04_config.yml — 渲染 config.ini 并验证
 
-- name: 渲染 config.ini（来自 secrets.yml + config.ini.j2）
+- name: 渲染 config.ini（来自 ansible/secrets.yml + config.ini.j2）
   template:
     src: "{{ pmdb_config_template }}"
     dest: "{{ pmdb_config_output }}"
