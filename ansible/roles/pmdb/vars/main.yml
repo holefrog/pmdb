@@ -2,16 +2,21 @@
 # ansible/roles/pmdb/vars/main.yml
 # 非敏感的角色变量（敏感信息来自 secrets.yml）
 
-# 项目根目录（相对 playbook 计算）
-pmdb_project_root: "{{ playbook_dir }}/.."
+# ── 部署目标 ─────────────────────────────────────────────────
+deploy_user: david
+deploy_dir: /home/david/Programs/Agent_Movie
 
+# ── 衍生路径（基于 deploy_dir 自动计算）─────────────────────
 # Python 虚拟环境路径
-pmdb_venv_dir: "{{ pmdb_project_root }}/venv"
+pmdb_venv_dir: "{{ deploy_dir }}/venv"
 
 # config.ini 输出路径
-pmdb_config_output: "{{ pmdb_project_root }}/config.ini"
+pmdb_config_output: "{{ deploy_dir }}/config.ini"
 
-# config.ini.j2 模板路径
+# run.sh 路径
+pmdb_run_script: "{{ deploy_dir }}/run.sh"
+
+# config.ini.j2 模板名（在 role templates/ 下）
 pmdb_config_template: "config.ini.j2"
 
 # 最低 Python 版本

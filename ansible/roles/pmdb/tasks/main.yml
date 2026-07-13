@@ -1,6 +1,18 @@
 ---
 # ansible/roles/pmdb/tasks/main.yml
 
+# ── 0. 显示部署信息 ──────────────────────────────────────────────────────────
+- name: 显示部署信息
+  debug:
+    msg:
+      - "========================================"
+      - "PMDB 部署开始"
+      - "部署用户: {{ deploy_user }}"
+      - "目标目录: {{ deploy_dir }}"
+      - "虚拟环境: {{ pmdb_venv_dir }}"
+      - "配置文件: {{ pmdb_config_output }}"
+      - "========================================"
+
 # ── 1. 环境检查 ──────────────────────────────────────────────────────────────
 - name: 检查 Python3 是否可用
   command: python3 --version
@@ -12,92 +24,152 @@
   debug:
     msg: "✅ Python 版本: {{ python_version_output.stdout }}"
 
-- name: 验证 secrets.yml 存在（由调用方传入 -e @secrets.yml）
+- name: 检查 python3-venv 是否可用
+  command: python3 -m venv --help
+  register: venv_check
+  changed_when: false
+  failed_when: false
+
+- name: 提示安装 python3-venv（若缺失）
+  debug:
+    msg: "⚠️ python3-venv 不可用，请手动运行: sudo apt-get install python3-venv python3-pip"
+  when: venv_check.rc != 0
+
+- name: 验证 secrets.yml 必填字段
   assert:
     that:
       - omdb_api_key is defined and omdb_api_key | length > 0
       - translate_provider is defined and translate_provider | length > 0
     fail_msg: >
       ❌ secrets.yml 缺少必要字段。
-      请检查 secrets.yml 是否存在且包含 omdb_api_key 和 translate_provider。
+      请确认 secrets.yml 包含 omdb_api_key 和 translate_provider。
       参考: secrets.yml.example
 
-# ── 2. 创建虚拟环境 ──────────────────────────────────────────────────────────
+# ── 2. 创建目标目录 ──────────────────────────────────────────────────────────
+- name: 确保目标目录存在
+  file:
+    path: "{{ deploy_dir }}"
+    state: directory
+    mode: "0755"
+    owner: "{{ deploy_user }}"
+
+# ── 3. 复制程序文件到目标目录 ────────────────────────────────────────────────
+- name: 复制 Python 源文件
+  copy:
+    src: "{{ item }}"
+    dest: "{{ deploy_dir }}/{{ item | basename }}"
+    owner: "{{ deploy_user }}"
+    mode: "0644"
+  loop:
+    - main.py
+    - scraper.py
+    - movie_api_service.py
+    - translate_service.py
+    - config_reader.py
+    - html_generator.py
+    - retry.py
+    - requirements.txt
+    - template.html
+
+- name: 复制静态资源（logo 等）
+  copy:
+    src: logo.png
+    dest: "{{ deploy_dir }}/logo.png"
+    owner: "{{ deploy_user }}"
+    mode: "0644"
+
+- name: 复制 run.sh 并设为可执行
+  copy:
+    src: run.sh
+    dest: "{{ pmdb_run_script }}"
+    owner: "{{ deploy_user }}"
+    mode: "0755"
+
+# ── 4. 创建/重建虚拟环境 ─────────────────────────────────────────────────────
 - name: 检查虚拟环境是否已存在
   stat:
     path: "{{ pmdb_venv_dir }}/bin/python"
   register: venv_stat
 
+- name: 删除旧虚拟环境（force_venv_recreate=true 时）
+  file:
+    path: "{{ pmdb_venv_dir }}"
+    state: absent
+  when:
+    - force_venv_recreate | default(false) | bool
+    - venv_stat.stat.exists
+
 - name: 创建 Python 虚拟环境
   command: python3 -m venv "{{ pmdb_venv_dir }}"
-  when: not venv_stat.stat.exists
+  args:
+    creates: "{{ pmdb_venv_dir }}/bin/python"
   changed_when: true
 
-# ── 3. 安装依赖 ──────────────────────────────────────────────────────────────
-- name: 升级 pip
+# ── 5. 安装依赖 ──────────────────────────────────────────────────────────────
+- name: 升级 pip 到最新版本
   pip:
     name: pip
     state: latest
     virtualenv: "{{ pmdb_venv_dir }}"
 
-- name: 安装项目依赖
+- name: 安装项目依赖（requirements.txt）
   pip:
-    requirements: "{{ pmdb_project_root }}/requirements.txt"
+    requirements: "{{ deploy_dir }}/requirements.txt"
     virtualenv: "{{ pmdb_venv_dir }}"
     state: present
 
-- name: 安装 Playwright Chromium（允许失败）
+# ── 6. 安装 Playwright Chromium ──────────────────────────────────────────────
+- name: 安装 Playwright Chromium（允许失败，运行时自动寻找系统浏览器）
   command: "{{ pmdb_venv_dir }}/bin/python -m playwright install chromium"
   register: playwright_install
   failed_when: false
   changed_when: playwright_install.rc == 0
 
-- name: Playwright Chromium 安装状态
+- name: Playwright 安装状态提示
   debug:
     msg: >-
       {% if playwright_install.rc == 0 %}
       ✅ Playwright Chromium 安装成功
       {% else %}
-      ⚠️ Playwright Chromium 安装失败（程序将尝试系统 Chrome/Chromium）
+      ⚠️ Playwright Chromium 安装失败（程序将尝试使用系统 Chrome/Chromium）。
+      若运行报错可手动安装：
+      wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
+      sudo apt install ./google-chrome-stable_current_amd64.deb
       {% endif %}
 
-# ── 4. 生成 config.ini ───────────────────────────────────────────────────────
-- name: 从模板生成 config.ini
+# ── 7. 生成 config.ini ───────────────────────────────────────────────────────
+- name: 从 secrets.yml 渲染生成 config.ini
   template:
     src: "{{ pmdb_config_template }}"
     dest: "{{ pmdb_config_output }}"
-    mode: "0600"
-    backup: true
+    owner: "{{ deploy_user }}"
+    mode: "0600"    # 仅所有者可读写（保护 API 密钥）
+    backup: true    # 旧版本自动备份为 config.ini.~1~
 
-# ── 5. 验证配置文件 ──────────────────────────────────────────────────────────
-- name: 验证生成的 config.ini 格式正确
+# ── 8. 验证配置文件 ──────────────────────────────────────────────────────────
+- name: 验证生成的 config.ini 格式合法
   command: >
     {{ pmdb_venv_dir }}/bin/python -c
     "import configparser; c=configparser.ConfigParser();
     c.read('{{ pmdb_config_output }}');
+    assert 'AI' in c and 'OMDb_API' in c, 'Missing required sections';
     print('sections:', c.sections())"
   register: config_validate
   changed_when: false
 
-- name: 显示验证结果
+- name: 显示配置验证结果
   debug:
-    msg: "✅ config.ini 解析成功，{{ config_validate.stdout }}"
+    msg: "✅ config.ini 验证通过 → {{ config_validate.stdout }}"
 
-# ── 6. 确保 run.sh 可执行 ────────────────────────────────────────────────────
-- name: 设置 run.sh 执行权限
-  file:
-    path: "{{ pmdb_project_root }}/run.sh"
-    mode: "0755"
-    state: file
-
+# ── 9. 完成 ──────────────────────────────────────────────────────────────────
 - name: 部署完成提示
   debug:
     msg:
       - "========================================"
       - "✅ PMDB 部署完成！"
       - "========================================"
-      - "运行方式: ./run.sh"
+      - "目标目录: {{ deploy_dir }}"
       - "翻译提供商: {{ translate_provider }}"
-      - "虚拟环境: {{ pmdb_venv_dir }}"
-      - "配置文件: {{ pmdb_config_output }}"
+      - "运行方式:"
+      - "  cd {{ deploy_dir }} && ./run.sh"
       - "========================================"
