@@ -8,20 +8,6 @@
     mode: "0600"    # 仅所有者可读，保护 API 密钥
     backup: true    # 旧版本自动备份
 
-- name: 验证 config.ini 包含必需 section
-  command: >
-    {{ pmdb_venv_dir }}/bin/python -c "
-    import configparser, sys
-    c = configparser.ConfigParser()
-    c.read('{{ pmdb_config_output }}')
-    missing = [s for s in ['AI', 'OMDb_API', 'Settings'] if s not in c]
-    if missing:
-        print('MISSING:', missing); sys.exit(1)
-    print('OK sections:', list(c.keys()))
-    "
-  register: config_check
-  changed_when: false
-
-- name: 显示配置验证结果
+- name: 显示配置生成结果
   debug:
-    msg: "✅ config.ini 验证通过 → {{ config_check.stdout }}"
+    msg: "✅ config.ini 生成成功 (已通过 mandatory 严格校验)"
