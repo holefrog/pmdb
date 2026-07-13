@@ -1,0 +1,106 @@
+---
+# ansible/roles/pmdb/tasks/main.yml
+
+# ── 1. 环境检查 ──────────────────────────────────────────────────────────────
+- name: 检查 Python3 是否可用
+  command: python3 --version
+  register: python_version_output
+  changed_when: false
+  failed_when: python_version_output.rc != 0
+
+- name: 显示 Python 版本
+  debug:
+    msg: "✅ Python 版本: {{ python_version_output.stdout }}"
+
+- name: 验证 secrets.yml 存在（由调用方传入 -e @secrets.yml）
+  assert:
+    that:
+      - omdb_api_key is defined and omdb_api_key | length > 0
+      - translate_provider is defined and translate_provider | length > 0
+    fail_msg: |
+      ❌ secrets.yml 缺少必要字段。
+      请检查 secrets.yml 是否存在且包含 omdb_api_key 和 translate_provider。
+      参考: secrets.yml.example
+
+# ── 2. 创建虚拟环境 ──────────────────────────────────────────────────────────
+- name: 检查虚拟环境是否已存在
+  stat:
+    path: "{{ pmdb_venv_dir }}/bin/python"
+  register: venv_stat
+
+- name: 创建 Python 虚拟环境
+  command: python3 -m venv "{{ pmdb_venv_dir }}"
+  when: not venv_stat.stat.exists
+  changed_when: true
+
+# ── 3. 安装依赖 ──────────────────────────────────────────────────────────────
+- name: 升级 pip
+  pip:
+    name: pip
+    state: latest
+    virtualenv: "{{ pmdb_venv_dir }}"
+
+- name: 安装项目依赖
+  pip:
+    requirements: "{{ pmdb_project_root }}/requirements.txt"
+    virtualenv: "{{ pmdb_venv_dir }}"
+    state: present
+
+- name: 安装 Playwright Chromium（允许失败，程序运行时会尝试系统浏览器）
+  command: "{{ pmdb_venv_dir }}/bin/python -m playwright install chromium"
+  register: playwright_install
+  failed_when: false
+  changed_when: playwright_install.rc == 0
+
+- name: Playwright Chromium 安装状态
+  debug:
+    msg: >-
+      {% if playwright_install.rc == 0 %}
+      ✅ Playwright Chromium 安装成功
+      {% else %}
+      ⚠️ Playwright Chromium 安装失败（程序将尝试系统 Chrome/Chromium）
+      {% endif %}
+
+# ── 4. 生成 config.ini ───────────────────────────────────────────────────────
+- name: 从模板生成 config.ini
+  template:
+    src: "{{ pmdb_config_template }}"
+    dest: "{{ pmdb_config_output }}"
+    mode: "0600"    # 只有所有者可读写（保护 API 密钥）
+    backup: true    # 旧版本自动备份为 config.ini.1
+  notify: "验证 config.ini"
+
+# ── 5. 验证配置文件 ──────────────────────────────────────────────────────────
+- name: 验证生成的 config.ini 格式正确
+  command: "{{ pmdb_venv_dir }}/bin/python -c \"import configparser; c=configparser.ConfigParser(); c.read('{{ pmdb_config_output }}'); print('✅ config.ini 解析成功，sections:', c.sections())\""
+  register: config_validate
+  changed_when: false
+
+- name: 显示验证结果
+  debug:
+    msg: "{{ config_validate.stdout }}"
+
+# ── 6. 确保 run.sh 可执行 ────────────────────────────────────────────────────
+- name: 设置 run.sh 执行权限
+  file:
+    path: "{{ pmdb_project_root }}/run.sh"
+    mode: "0755"
+    state: file
+
+- name: 部署完成提示
+  debug:
+    msg:
+      - "========================================"
+      - "✅ PMDB 部署完成！"
+      - "========================================"
+      - "运行方式: ./run.sh"
+      - "翻译提供商: {{ translate_provider }}"
+      - "虚拟环境: {{ pmdb_venv_dir }}"
+      - "配置文件: {{ pmdb_config_output }}"
+      - "========================================"
+
+# ── Handlers ─────────────────────────────────────────────────────────────────
+handlers:
+  - name: 验证 config.ini
+    debug:
+      msg: "config.ini 已更新（旧版本已备份）"

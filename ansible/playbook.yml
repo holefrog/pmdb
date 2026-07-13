@@ -1,0 +1,16 @@
+---
+# ============================================================
+# PMDB Ansible Playbook - 本地部署
+# 用法：ansible-playbook ansible/playbook.yml -e @secrets.yml
+# ============================================================
+
+- name: PMDB 本地部署
+  hosts: localhost
+  connection: local
+  gather_facts: true
+
+  vars_files:
+    - "{{ playbook_dir }}/../secrets.yml"
+
+  roles:
+    - role: "{{ playbook_dir }}/roles/pmdb"
