@@ -1,10 +1,10 @@
 ---
 # ansible/roles/pmdb/vars/main.yml
-# 非敏感的角色变量（敏感信息来自 secrets.yml）
+# 非敏感的角色变量（敏感信息请在 ansible/secrets.yml 中配置）
 
 # ── 部署目标 ─────────────────────────────────────────────────
 deploy_user: david
-deploy_dir: /home/david/Programs/PMDB
+deploy_dir: /home/david/Programs/Agent_Movie
 
 # ── 衍生路径（基于 deploy_dir 自动计算）─────────────────────
 # Python 虚拟环境路径
@@ -21,3 +21,36 @@ pmdb_config_template: "config.ini.j2"
 
 # 最低 Python 版本
 pmdb_min_python_version: "3.8"
+
+# ── 默认应用配置 (非敏感) ────────────────────────────────────
+translate_provider: "mistral"
+
+# 模型
+gemini_translate_model: "gemini-2.5-flash"
+openai_translate_model: "gpt-4o-mini"
+mistral_translate_model: "mistral-large-latest"
+groq_translate_model: "llama-3.3-70b-versatile"
+nvidia_translate_model: "meta/llama-3.3-70b-instruct"
+imdb_lookup_model: "mistral-small-latest"
+
+# 运行参数
+max_workers: 10
+max_movies: 100
+mistral_batch_size: 10
+request_timeout: 15
+retry_delay_min: 0.2
+retry_delay_max: 0.5
+
+# Endpoints
+mistral_endpoint: "https://api.mistral.ai/v1/chat/completions"
+openai_endpoint: "https://api.openai.com/v1/chat/completions"
+groq_endpoint: "https://api.groq.com/openai/v1/chat/completions"
+nvidia_endpoint: "https://integrate.api.nvidia.com/v1/chat/completions"
+gemini_endpoint: "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
+
+# 爬虫源 (按优先级排序)
+scraper_urls:
+  - "https://thepiratebay.org/search.php?q=top100:207"
+  - "https://piratebay.live/search.php?q=top100:207"
+  - "https://tpb.party/search.php?q=top100:207"
+  - "https://thepiratebay.org/top/207"

@@ -8,61 +8,56 @@
 
 [AI]
 # 翻译服务提供商（mistral / openai / groq / nvidia / gemini）
-translate_provider = {{ translate_provider | default('mistral') }}
+translate_provider = {{ translate_provider }}
 
 # ── API 密钥（来自 ansible/secrets.yml）──────────────────────────────
-mistral_api_key = {{ mistral_api_key | default('') }}
-openai_api_key  = {{ openai_api_key  | default('') }}
-groq_api_key    = {{ groq_api_key    | default('') }}
-nvidia_api_key  = {{ nvidia_api_key  | default('') }}
-gemini_api_key  = {{ gemini_api_key  | default('') }}
+mistral_api_key = {{ mistral_api_key }}
+openai_api_key  = {{ openai_api_key }}
+groq_api_key    = {{ groq_api_key }}
+nvidia_api_key  = {{ nvidia_api_key }}
+gemini_api_key  = {{ gemini_api_key }}
 
 # ── 各提供商翻译模型 ─────────────────────────────────────────
-gemini_translate_model  = {{ gemini_translate_model  | default('gemini-2.5-flash') }}
-openai_translate_model  = {{ openai_translate_model  | default('gpt-4o-mini') }}
-mistral_translate_model = {{ mistral_translate_model | default('mistral-large-latest') }}
-groq_translate_model    = {{ groq_translate_model    | default('llama-3.3-70b-versatile') }}
-nvidia_translate_model  = {{ nvidia_translate_model  | default('meta/llama-3.3-70b-instruct') }}
+gemini_translate_model  = {{ gemini_translate_model }}
+openai_translate_model  = {{ openai_translate_model }}
+mistral_translate_model = {{ mistral_translate_model }}
+groq_translate_model    = {{ groq_translate_model }}
+nvidia_translate_model  = {{ nvidia_translate_model }}
+
+# ── 各提供商 API 端点 ─────────────────────────────────────────
+mistral_endpoint = {{ mistral_endpoint }}
+openai_endpoint  = {{ openai_endpoint }}
+groq_endpoint    = {{ groq_endpoint }}
+nvidia_endpoint  = {{ nvidia_endpoint }}
+gemini_endpoint  = {{ gemini_endpoint }}
 
 # IMDb AI 兜底查询模型（固定使用 Mistral API，需 mistral_api_key）
-imdb_lookup_model = {{ imdb_lookup_model | default('mistral-small-latest') }}
+imdb_lookup_model = {{ imdb_lookup_model }}
 
 
 [OMDb_API]
-# OMDb API 密钥（免费注册：https://www.omdbapi.com/apikey.aspx）
+# OMDb API 密钥
 OMDB_KEY = {{ omdb_api_key }}
 
 
 [Settings]
-# 并行工作线程数（建议 3-10）
-max_workers = {{ max_workers | default(5) }}
+# 并行工作线程数
+max_workers = {{ max_workers }}
 
 # 最大处理电影数量
-max_movies = {{ max_movies | default(100) }}
+max_movies = {{ max_movies }}
 
-# 每批翻译文本数量（建议 10-20）
-mistral_batch_size = {{ mistral_batch_size | default(10) }}
+# 每批翻译文本数量
+mistral_batch_size = {{ mistral_batch_size }}
 
 # 网络请求超时时间（秒）
-request_timeout = {{ request_timeout | default(10) }}
+request_timeout = {{ request_timeout }}
 
 # 请求延迟范围（秒，避免触发反爬虫）
-retry_delay_min = {{ retry_delay_min | default(0.2) }}
-retry_delay_max = {{ retry_delay_max | default(0.5) }}
+retry_delay_min = {{ retry_delay_min }}
+retry_delay_max = {{ retry_delay_max }}
 
 
 [Sources]
 # 爬虫来源 URL 列表（逗号分隔，按优先级排序）
-# 第一个可用源成功即停止，后续为 Fallback
-scraper_urls =
-{% if scraper_urls is defined and scraper_urls | length > 0 %}
-{% for url in scraper_urls %}
-    {{ url }}{% if not loop.last %},{% endif %}
-
-{% endfor %}
-{% else %}
-    https://thepiratebay.org/search.php?q=top100:207,
-    https://piratebay.live/search.php?q=top100:207,
-    https://tpb.party/search.php?q=top100:207,
-    https://thepiratebay.org/top/207
-{% endif %}
+scraper_urls = {% for url in scraper_urls %}{{ url }}{% if not loop.last %},{% endif %}{% endfor %}

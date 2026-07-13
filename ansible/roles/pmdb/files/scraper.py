@@ -1,8 +1,7 @@
 """
 使用 Playwright 抓取 BT 站电影 Top 100。
 - 支持多个备用源（从 config 读取 scraper_urls），依次降级尝试
-- 去重时统一转小写，避免大小写导致的重复
-- 标准化 & / AND，确保去重 key 一致
+- 没有任何硬编码的回退 URL。
 """
 import re
 import os
@@ -11,36 +10,16 @@ from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeo
 
 logger = logging.getLogger(__name__)
 
-# 内置备用镜像列表（config 中未配置时使用）
-DEFAULT_SCRAPER_URLS = [
-    "https://thepiratebay.org/search.php?q=top100:207",
-    "https://piratebay.live/search.php?q=top100:207",
-    "https://tpb.party/search.php?q=top100:207",
-    "https://thepiratebay.org/top/207",
-]
-
 
 def _normalize_for_dedup(title: str) -> str:
-    """
-    将标题规范化用于去重 key，不改变显示用的原始标题。
-    - 统一小写
-    - & 与 And/AND 统一为 &
-    - 多余空格合并
-    - 去除撇号（Tom Clancy's → tom clancys）以对齐种子命名
-    """
     t = title.lower().strip()
-    # 把 " and " 统一成 " & "（用于去重比较）
     t = re.sub(r'\band\b', '&', t)
-    # 合并连续空格（& 两侧可能有不对称空格）
     t = re.sub(r'\s+', ' ', t).strip()
     return t
 
 
 def extract_title_year(name: str):
-    """从种子名中提取标题和年份。"""
-    # 先替换点为空格（部分种子用点分隔）
     name = re.sub(r'\.', ' ', name)
-    # 常见质量标签去除（避免影响标题提取）
     noise = re.compile(
         r'\b(EXTENDED|REPACK|THEATRICAL|UNCUT|4K|HDR|IMAX|WEB-DL|BLURAY|'
         r'1080p|720p|2160p|x264|x265|HEVC|AAC|DTS|BluRay|BRRip|DVDRip|'
@@ -61,13 +40,8 @@ def extract_title_year(name: str):
 
 
 def _fetch_from_url(url: str) -> list[str]:
-    """
-    使用 Playwright 从单个 URL 抓取电影名，返回原始名称列表。
-    失败时抛出异常（由调用方捕获并尝试下一个源）。
-    """
     logger.info(f"正在抓取: {url}")
     with sync_playwright() as p:
-        # 尝试 Playwright 内置 Chromium，失败则找系统浏览器
         try:
             browser = p.chromium.launch(
                 headless=True,
@@ -133,11 +107,7 @@ def _fetch_from_url(url: str) -> list[str]:
 
 
 def _dedup_movies(raw_names: list[str]) -> list[str]:
-    """
-    去重：key = 规范化标题 + 年份（统一小写、& 标准化），value 保留原始大小写标题。
-    返回格式：["Title Year", ...]
-    """
-    unique = {}  # key: normalized_key → value: "OriginalTitle Year"
+    unique = {}
     for name in raw_names:
         title, year = extract_title_year(name)
         if not title or not year:
@@ -151,19 +121,19 @@ def _dedup_movies(raw_names: list[str]) -> list[str]:
     return result
 
 
-def get_top100_with_fallback(config: dict | None = None) -> list[str]:
+def get_top100_with_fallback(config: dict) -> list[str]:
     """
     获取 Top 100 电影列表，支持多源 Fallback。
-    - 先从 config['scraper_urls'] 读取 URL 列表
-    - 若 config 为 None 或未配置，使用内置默认列表
-    - 依次尝试每个 URL，第一个成功即返回
+    必须提供 config，并从中读取 scraper_urls。
     """
-    urls = DEFAULT_SCRAPER_URLS.copy()
-    if config:
-        configured = config.get("scraper_urls", [])
-        if configured:
-            # 用户配置的在前，内置的在后作为最终兜底
-            urls = configured + [u for u in DEFAULT_SCRAPER_URLS if u not in configured]
+    if not config:
+        logger.error("❌ 配置字典为空，无法获取爬虫源。")
+        return []
+        
+    urls = config.get("scraper_urls", [])
+    if not urls:
+        logger.error("❌ config.ini 中未配置 scraper_urls。无法继续。")
+        return []
 
     for i, url in enumerate(urls):
         try:
@@ -178,11 +148,5 @@ def get_top100_with_fallback(config: dict | None = None) -> list[str]:
         except Exception as e:
             logger.warning(f"⚠️ 源 {url} 失败 ({type(e).__name__}: {e})，尝试下一个源")
 
-    logger.error("❌ 所有源均失败，无法获取电影列表")
+    logger.error("❌ 所有配置的源均失败，无法获取电影列表")
     return []
-
-
-# 保留旧函数名作为兼容层（供其他可能调用旧接口的脚本使用）
-def get_piratebay_top100() -> list[str]:
-    """兼容旧接口，内部调用 get_top100_with_fallback()"""
-    return get_top100_with_fallback(config=None)

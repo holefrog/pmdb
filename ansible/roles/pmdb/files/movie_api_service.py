@@ -154,11 +154,12 @@ def _get_ai_imdb_id(
 ) -> Optional[str]:
     """使用配置的 AI 服务推理 IMDb ID（AI 兜底查询）。"""
     # AI 兜底固定用 Mistral（最稳定，有 JSON mode）
-    api_key = config.get("mistral_api_key", "")
+    api_key = config["mistral_api_key"]
     if not api_key:
         return None
 
-    model = config.get("imdb_lookup_model", "mistral-small-latest")
+    model = config["imdb_lookup_model"]
+    endpoint = config["mistral_endpoint"]
     prompt = (
         f"Find the official IMDb ID for the movie currently titled '{name}'. "
         "Note: This title might contain extra franchise names, incorrect release years, "
@@ -179,7 +180,7 @@ def _get_ai_imdb_id(
     }
     try:
         resp = session.post(
-            "https://api.mistral.ai/v1/chat/completions",
+            endpoint,
             headers=headers,
             json=payload,
             timeout=timeout
@@ -257,9 +258,9 @@ def get_imdb_info(
         return None, None, None
 
     session = get_session_with_retries()
-    timeout = config.get("request_timeout", 10)
-    delay_min = config.get("retry_delay_min", 0.2)
-    delay_max = config.get("retry_delay_max", 0.5)
+    timeout = config["request_timeout"]
+    delay_min = config["retry_delay_min"]
+    delay_max = config["retry_delay_max"]
 
     def _delay() -> float:
         d = random.uniform(delay_min, delay_max)

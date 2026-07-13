@@ -7,7 +7,7 @@
   nvidia   → Nvidia NIM (OpenAI-compatible)
   gemini   → Google Gemini
 
-替代旧版 mistral_service.py（已删除）。
+所有模型、端点均通过 config (secrets.yml -> config.ini) 获取，不在代码中硬编码。
 """
 import json
 import logging
@@ -32,17 +32,11 @@ class AbstractTranslator(ABC):
     """所有翻译器的基类，提供批量翻译接口。"""
 
     def translate_texts(self, texts: List[str], batch_size: int = 10) -> List[str]:
-        """
-        批量翻译文本列表。
-        - 空/None 项直接保留原值
-        - 翻译失败的批次以 [错误标注] 形式返回
-        """
         if not texts:
             return []
 
-        # 过滤出需翻译的索引
         to_translate = [(i, t) for i, t in enumerate(texts) if t and t.strip()]
-        results = list(texts)  # 先复制，空项保持原值
+        results = list(texts)
 
         if not to_translate:
             return results
@@ -93,11 +87,6 @@ class AbstractTranslator(ABC):
 # ─────────────────────────────────────────────────────────────────────────────
 
 class OpenAICompatibleTranslator(AbstractTranslator):
-    """
-    通用 OpenAI-compatible API 翻译器。
-    Mistral、OpenAI、Groq、Nvidia NIM 均可复用此实现。
-    """
-
     def __init__(self, api_key: str, model: str, endpoint: str, timeout: int = 60):
         self.api_key = api_key
         self.model = model
@@ -153,16 +142,10 @@ class OpenAICompatibleTranslator(AbstractTranslator):
 # ─────────────────────────────────────────────────────────────────────────────
 
 class GeminiTranslator(AbstractTranslator):
-    """Google Gemini API 翻译器（使用 REST generateContent 接口）。"""
-
-    ENDPOINT_TEMPLATE = (
-        "https://generativelanguage.googleapis.com/v1beta/models/"
-        "{model}:generateContent?key={api_key}"
-    )
-
-    def __init__(self, api_key: str, model: str, timeout: int = 60):
+    def __init__(self, api_key: str, model: str, endpoint_template: str, timeout: int = 60):
         self.api_key = api_key
         self.model = model
+        self.endpoint_template = endpoint_template
         self.timeout = timeout
         self._retry_cfg = {
             "max_retries": 3,
@@ -178,7 +161,8 @@ class GeminiTranslator(AbstractTranslator):
             "of translated strings in the exact same order.\n\n"
             f"{json.dumps(texts, ensure_ascii=False)}"
         )
-        url = self.ENDPOINT_TEMPLATE.format(model=self.model, api_key=self.api_key)
+        # 支持从配置里提供 {model} 和 {api_key} 占位符
+        url = self.endpoint_template.format(model=self.model, api_key=self.api_key)
         payload = {
             "contents": [{"parts": [{"text": prompt}]}],
             "generationConfig": {"responseMimeType": "application/json"},
@@ -201,91 +185,47 @@ class GeminiTranslator(AbstractTranslator):
 # 工厂函数
 # ─────────────────────────────────────────────────────────────────────────────
 
-_PROVIDER_ENDPOINTS = {
-    "mistral": "https://api.mistral.ai/v1/chat/completions",
-    "openai": "https://api.openai.com/v1/chat/completions",
-    "groq": "https://api.groq.com/openai/v1/chat/completions",
-    "nvidia": "https://integrate.api.nvidia.com/v1/chat/completions",
-}
-
-_PROVIDER_API_KEY_FIELD = {
-    "mistral": "mistral_api_key",
-    "openai": "openai_api_key",
-    "groq": "groq_api_key",
-    "nvidia": "nvidia_api_key",
-    "gemini": "gemini_api_key",
-}
-
-_PROVIDER_MODEL_FIELD = {
-    "mistral": "mistral_translate_model",
-    "openai": "openai_translate_model",
-    "groq": "groq_translate_model",
-    "nvidia": "nvidia_translate_model",
-    "gemini": "gemini_translate_model",
-}
-
-_PROVIDER_MODEL_DEFAULTS = {
-    "mistral": "mistral-large-latest",
-    "openai": "gpt-4o-mini",
-    "groq": "llama-3.3-70b-versatile",
-    "nvidia": "meta/llama-3.3-70b-instruct",
-    "gemini": "gemini-2.5-flash",
-}
-
-
 def get_translator(config: dict) -> Optional[AbstractTranslator]:
     """
     根据 config['translate_provider'] 实例化对应的翻译器。
-
-    Args:
-        config: read_config() 返回的字典
-
-    Returns:
-        AbstractTranslator 子类实例，或 None（配置错误时）
     """
-    provider = config.get("translate_provider", "mistral").lower().strip()
+    provider = config.get("translate_provider", "").lower().strip()
     timeout = config.get("request_timeout", 60)
 
-    api_key_field = _PROVIDER_API_KEY_FIELD.get(provider)
-    if not api_key_field:
-        logger.error(f"❌ 未知翻译提供商: '{provider}'，支持: {list(_PROVIDER_API_KEY_FIELD.keys())}")
+    if not provider:
+        logger.error("❌ 翻译提供商未配置！")
         return None
 
-    api_key = config.get(api_key_field, "").strip()
+    api_key_field = f"{provider}_api_key"
+    model_field = f"{provider}_translate_model"
+    endpoint_field = f"{provider}_endpoint"
+
+    api_key = config.get(api_key_field)
     if not api_key:
         logger.error(f"❌ 翻译提供商 '{provider}' 的 API 密钥为空（字段: {api_key_field}）")
         return None
 
-    model_field = _PROVIDER_MODEL_FIELD[provider]
-    model = config.get(model_field, _PROVIDER_MODEL_DEFAULTS[provider])
+    model = config.get(model_field)
+    if not model:
+        logger.error(f"❌ 翻译提供商 '{provider}' 的模型为空（字段: {model_field}）")
+        return None
+
+    endpoint = config.get(endpoint_field)
+    if not endpoint:
+        logger.error(f"❌ 翻译提供商 '{provider}' 的端点为空（字段: {endpoint_field}）")
+        return None
 
     if provider == "gemini":
         logger.info(f"✅ 使用翻译提供商: Gemini，模型: {model}")
-        return GeminiTranslator(api_key=api_key, model=model, timeout=timeout)
+        return GeminiTranslator(api_key=api_key, model=model, endpoint_template=endpoint, timeout=timeout)
     else:
-        endpoint = _PROVIDER_ENDPOINTS[provider]
         logger.info(f"✅ 使用翻译提供商: {provider}，模型: {model}，端点: {endpoint}")
         return OpenAICompatibleTranslator(
             api_key=api_key, model=model, endpoint=endpoint, timeout=timeout
         )
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# 便捷函数（供 main.py 调用，与旧 mistral_service.translate_texts 接口兼容）
-# ─────────────────────────────────────────────────────────────────────────────
-
 def translate_texts(texts: List[str], config: dict, batch_size: int = 10) -> List[str]:
-    """
-    便捷入口：从 config 自动选择翻译器并翻译。
-
-    Args:
-        texts: 待翻译文本列表
-        config: read_config() 返回的字典
-        batch_size: 每批翻译数量
-
-    Returns:
-        翻译后的文本列表（失败项带错误标注）
-    """
     translator = get_translator(config)
     if not translator:
         logger.error("❌ 无法初始化翻译器，返回原始文本")

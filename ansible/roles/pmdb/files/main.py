@@ -46,10 +46,10 @@ def main():
             logger.error("❌ 配置加载失败，程序退出")
             return
 
-        max_workers  = config.get("max_workers", 5)
-        max_movies   = config.get("max_movies", 100)
-        batch_size   = config.get("mistral_batch_size", 10)
-        provider     = config.get("translate_provider", "mistral")
+        max_workers  = config["max_workers"]
+        max_movies   = config["max_movies"]
+        batch_size   = config["mistral_batch_size"]
+        provider     = config["translate_provider"]
 
         # ── 步骤 2：获取电影列表 ─────────────────────────────────
         logger.info("\n[步骤 2/4] 从 BT 站获取电影列表（支持多源 Fallback）...")
