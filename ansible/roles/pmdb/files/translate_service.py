@@ -14,6 +14,7 @@ import logging
 import requests
 from abc import ABC, abstractmethod
 from typing import List, Optional
+from config_reader import CONFIG
 
 try:
     from retry import with_retry
@@ -185,12 +186,12 @@ class GeminiTranslator(AbstractTranslator):
 # 工厂函数
 # ─────────────────────────────────────────────────────────────────────────────
 
-def get_translator(config: dict) -> Optional[AbstractTranslator]:
+def get_translator() -> Optional[AbstractTranslator]:
     """
-    根据 config['translate_provider'] 实例化对应的翻译器。
+    根据 CONFIG['translate_provider'] 实例化对应的翻译器。
     """
-    provider = config.get("translate_provider", "").lower().strip()
-    timeout = config.get("request_timeout", 60)
+    provider = CONFIG.get("translate_provider", "").lower().strip()
+    timeout = CONFIG.get("request_timeout", 60)
 
     if not provider:
         logger.error("❌ 翻译提供商未配置！")
@@ -200,17 +201,17 @@ def get_translator(config: dict) -> Optional[AbstractTranslator]:
     model_field = f"{provider}_translate_model"
     endpoint_field = f"{provider}_endpoint"
 
-    api_key = config.get(api_key_field)
+    api_key = CONFIG.get(api_key_field)
     if not api_key:
         logger.error(f"❌ 翻译提供商 '{provider}' 的 API 密钥为空（字段: {api_key_field}）")
         return None
 
-    model = config.get(model_field)
+    model = CONFIG.get(model_field)
     if not model:
         logger.error(f"❌ 翻译提供商 '{provider}' 的模型为空（字段: {model_field}）")
         return None
 
-    endpoint = config.get(endpoint_field)
+    endpoint = CONFIG.get(endpoint_field)
     if not endpoint:
         logger.error(f"❌ 翻译提供商 '{provider}' 的端点为空（字段: {endpoint_field}）")
         return None
@@ -225,8 +226,8 @@ def get_translator(config: dict) -> Optional[AbstractTranslator]:
         )
 
 
-def translate_texts(texts: List[str], config: dict, batch_size: int = 10) -> List[str]:
-    translator = get_translator(config)
+def translate_texts(texts: List[str], batch_size: int = 10) -> List[str]:
+    translator = get_translator()
     if not translator:
         logger.error("❌ 无法初始化翻译器，返回原始文本")
         return [f"[翻译器初始化失败] {t[:50]}" for t in texts]

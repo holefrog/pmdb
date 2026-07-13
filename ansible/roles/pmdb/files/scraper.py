@@ -7,6 +7,7 @@ import re
 import os
 import logging
 from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeout
+from config_reader import CONFIG
 
 logger = logging.getLogger(__name__)
 
@@ -121,16 +122,12 @@ def _dedup_movies(raw_names: list[str]) -> list[str]:
     return result
 
 
-def get_top100_with_fallback(config: dict) -> list[str]:
+def get_top100_with_fallback() -> list[str]:
     """
     获取 Top 100 电影列表，支持多源 Fallback。
-    必须提供 config，并从中读取 scraper_urls。
+    必须从 CONFIG 中读取 scraper_urls。
     """
-    if not config:
-        logger.error("❌ 配置字典为空，无法获取爬虫源。")
-        return []
-        
-    urls = config.get("scraper_urls", [])
+    urls = CONFIG.get("scraper_urls", [])
     if not urls:
         logger.error("❌ config.ini 中未配置 scraper_urls。无法继续。")
         return []
