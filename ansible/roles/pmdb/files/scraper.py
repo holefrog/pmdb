@@ -26,7 +26,8 @@ def extract_title_year(name: str):
     noise = re.compile(
         r'\b(EXTENDED|REPACK|THEATRICAL|UNCUT|4K|HDR|IMAX|WEB-DL|BLURAY|'
         r'1080p|720p|2160p|x264|x265|HEVC|AAC|DTS|BluRay|BRRip|DVDRip|'
-        r'WEBRip|HDTV|NF|AMZN|DSNP|HULU)\b.*$',
+        r'WEBRip|HDTV|NF|AMZN|DSNP|HULU|'
+        r'TELESYNC|CAM|HDRip|WEB|DCPRIP|DCPRiP|iNTERNAL|DC)\b.*$',
         re.IGNORECASE
     )
     name = noise.sub('', name).strip()
