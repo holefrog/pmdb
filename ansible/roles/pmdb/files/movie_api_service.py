@@ -215,14 +215,17 @@ def _fetch_omdb_by_id(
     return data if data.get("Response") == "True" else None
 
 
-def _extract_result(data: dict) -> Tuple[str, str, str]:
-    """从 OMDb 响应中提取 (rating, summary, image_url)。"""
-    rating = data.get("imdbRating", "N/A")
-    summary = data.get("Plot", "No summary available.")
+def _extract_result(data: dict) -> Tuple[str, str, str, Optional[str], str]:
+    """从 OMDb 响应中提取 (rating, summary, image_url, imdb_id, official_name)。"""
+    rating    = data.get("imdbRating", "N/A")
+    summary   = data.get("Plot", "No summary available.")
     image_url = data.get("Poster", "")
+    imdb_id   = data.get("imdbID")  # IMDb 官方 ID，用于去重
+    # 拼接 IMDb 官方片名+年份，覆盖 BT 站的原始标题
+    official_name = f"{data.get('Title', '')} {data.get('Year', '')}".strip()
     if not image_url or image_url == "N/A":
         image_url = "https://placehold.co/150x220?text=No+Poster"
-    return rating, summary, image_url
+    return rating, summary, image_url, imdb_id, official_name
 
 
 def get_imdb_info(
@@ -239,7 +242,7 @@ def get_imdb_info(
         name: "Title Year" 格式
 
     Returns:
-        (rating, summary, image_url) 或 (None, None, None)
+        (rating, summary, image_url, imdb_id, official_name) 或 (None, None, None, None, None)
     """
     omdb_api_key = CONFIG.get("omdb_api_key")
     if not omdb_api_key:
@@ -282,12 +285,12 @@ def get_imdb_info(
             resp.raise_for_status()
             data = resp.json()
             if data.get("Response") == "True":
-                rating, summary, image_url = _extract_result(data)
+                rating, summary, image_url, imdb_id, official_name = _extract_result(data)
                 if rating == "N/A" and summary == "No summary available.":
                     logger.debug(f"找到但数据为空: '{search_title}' (y={search_year})")
                     continue
                 logger.debug(f"✅ 精确命中: '{search_title}' (y={search_year})")
-                return rating, summary, image_url
+                return rating, summary, image_url, imdb_id, official_name
             else:
                 logger.debug(f"OMDb 未命中: '{search_title}' (y={search_year}) → {data.get('Error')}")
         except (requests.ConnectionError, requests.Timeout, requests.HTTPError) as e:
@@ -315,9 +318,9 @@ def get_imdb_info(
                 if imdb_id:
                     data = _fetch_omdb_by_id(imdb_id, omdb_api_key, session, timeout, _delay())
                     if data:
-                        rating, summary, image_url = _extract_result(data)
+                        rating, summary, image_url, imdb_id, official_name = _extract_result(data)
                         logger.debug(f"✅ 模糊命中: '{fuzzy_title}' → {imdb_id}")
-                        return rating, summary, image_url
+                        return rating, summary, image_url, imdb_id, official_name
         except Exception as e:
             logger.debug(f"模糊搜索异常: {e}")
             continue
@@ -329,23 +332,23 @@ def get_imdb_info(
         try:
             data = _fetch_omdb_by_id(imdb_id, omdb_api_key, session, timeout, _delay())
             if data:
-                rating, summary, image_url = _extract_result(data)
+                rating, summary, image_url, imdb_id, official_name = _extract_result(data)
                 logger.debug(f"✅ AI 兜底命中: '{name}' → {imdb_id}")
-                return rating, summary, image_url
+                return rating, summary, image_url, imdb_id, official_name
         except Exception as e:
             logger.debug(f"AI 兜底 OMDb 验证异常: {e}")
 
     logger.debug(f"❌ 所有搜索均失败: {name}")
-    return None, None, None
+    return None, None, None, None, None
 
 
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-def _fetch_single_movie(name: str) -> Optional[Tuple[str, str, str, str]]:
+def _fetch_single_movie(name: str) -> Optional[Tuple[str, str, str, str, Optional[str], str]]:
     """线程工作函数：获取单部电影的 IMDb 信息。"""
-    rating, summary, image_url = get_imdb_info(name)
+    rating, summary, image_url, imdb_id, official_name = get_imdb_info(name)
     if rating and summary and image_url:
-        return name, rating, summary, image_url
+        return name, rating, summary, image_url, imdb_id, official_name
     return None
 
 
@@ -376,12 +379,13 @@ def fetch_imdb_info_batch(movie_list: List[str]) -> Tuple[List[dict], List[str]]
             try:
                 result = future.result()
                 if result:
-                    _, rating, summary, image_url = result
+                    _, rating, summary, image_url, imdb_id, official_name = result
                     results_ordered[i] = {
-                        'name': name,
-                        'rating': rating,
-                        'summary_en': summary,
-                        'image_url': image_url,
+                        'name':          official_name if official_name else name,
+                        'rating':        rating,
+                        'summary_en':    summary,
+                        'image_url':     image_url,
+                        'imdb_id':       imdb_id,
                     }
                 else:
                     failed_movies.append(name)
