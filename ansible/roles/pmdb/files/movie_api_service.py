@@ -230,7 +230,7 @@ def _extract_result(data: dict) -> Tuple[str, str, str, Optional[str], str]:
 
 def get_imdb_info(
     name: str
-) -> Tuple[Optional[str], Optional[str], Optional[str]]:
+) -> Tuple[Optional[str], Optional[str], Optional[str], Optional[str], Optional[str]]:
     """
     使用 OMDb API 获取电影信息，四阶段搜索策略：
     1. 精确 title+year 搜索（多变体 × 年份±1）
@@ -247,7 +247,7 @@ def get_imdb_info(
     omdb_api_key = CONFIG.get("omdb_api_key")
     if not omdb_api_key:
         logger.error("❌ 未找到 OMDb API 密钥")
-        return None, None, None
+        return None, None, None, None, None
 
     # 拆分 "Title Year"
     parts = name.rsplit(" ", 1)
@@ -256,7 +256,7 @@ def get_imdb_info(
 
     if not year:
         logger.warning(f"跳过 '{name}' - 缺少年份")
-        return None, None, None
+        return None, None, None, None, None
 
     session = get_session_with_retries()
     timeout = CONFIG["request_timeout"]
@@ -295,10 +295,10 @@ def get_imdb_info(
                 logger.debug(f"OMDb 未命中: '{search_title}' (y={search_year}) → {data.get('Error')}")
         except (requests.ConnectionError, requests.Timeout, requests.HTTPError) as e:
             logger.debug(f"网络错误 [{name}]: {e}")
-            return None, None, None
+            return None, None, None, None, None
         except Exception as e:
             logger.debug(f"未知错误 [{name}]: {e}")
-            return None, None, None
+            return None, None, None, None, None
 
     # ── 阶段 2：模糊搜索（s=）────────────────────────────────
     cleaned = clean_title_for_search(title)

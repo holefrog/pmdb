@@ -27,12 +27,13 @@ def extract_title_year(name: str):
         r'\b(EXTENDED|REPACK|THEATRICAL|UNCUT|4K|HDR|IMAX|WEB-DL|BLURAY|'
         r'1080p|720p|2160p|x264|x265|HEVC|AAC|DTS|BluRay|BRRip|DVDRip|'
         r'WEBRip|HDTV|NF|AMZN|DSNP|HULU|'
-        r'TELESYNC|CAM|HDRip|WEB|DCPRIP|DCPRiP|iNTERNAL|DC)\b.*$',
+        r'TELESYNC|HDRip|DCPRIP|DCPRiP|iNTERNAL)\b.*$',
         re.IGNORECASE
     )
     name = noise.sub('', name).strip()
 
-    pattern = r'^(.*?)(?:\s*\((\d{4})\)|\s+(\d{4})\s*$)'
+    # lookahead: 年份后跟空格或行尾，允许年份后仍有剩余文字（如 "Troy 2004 DC"）
+    pattern = r'^(.*?)(?:\s*\((\d{4})\)|\s+(\d{4})(?=\s|$))'
     match = re.search(pattern, name)
     if match:
         title = match.group(1).strip()
