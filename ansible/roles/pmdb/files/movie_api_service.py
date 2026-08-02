@@ -6,6 +6,7 @@ import logging
 from typing import Tuple, Optional, List
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from config_reader import CONFIG
 
 # OMDb API 版本 - 替代 IMDb 网页抓取
@@ -56,32 +57,20 @@ def normalize_title_variants(title: str) -> List[str]:
     """
     生成标题的多种等价变体，覆盖 BT 站常见差异：
     1. & ↔ And（双向转换）
-    2. 撇号恢复（Clancys → Clancy's）
-    3. 连字符处理（Spider-Man → Spider Man）
+    2. 连字符处理（Spider-Man → Spider Man）
     返回去重保序列表。
+
+    注：撤号还原（Clancys → Clancy's）已移除，因为 OMDb ?t= 内部做宽松匹配，
+         且自动生成的大量错误变体（Sinner's、Furiou's等）干扰搜索。
     """
     variants = [title]
 
-    # ── & ↔ And 双向 ──────────────────────────────────────────
+    # ── & ↔ And 双向 ──────────────────────────────────────────────────
     if ' & ' in title:
         variants.append(title.replace(' & ', ' And '))
     and_re = re.compile(r'\bAnd\b', re.IGNORECASE)
     if and_re.search(title):
         variants.append(and_re.sub('&', title))
-
-    # ── 撇号还原：Clancys → Clancy's，Mans → Man's ──────────
-    # BT 站常去掉撇号，OMDb 则保留原始拼写
-    apostrophe_re = re.compile(r'\b(\w+)s\b')
-    def _try_apostrophe(t: str) -> str:
-        # 在最后一个 s 前插入撇号（保守处理，只生成一种变体）
-        # 例: Clancys → Clancy's
-        return apostrophe_re.sub(lambda m: m.group(1) + "'s", t)
-
-    for v in list(variants):
-        if 's ' in v or v.endswith('s'):
-            cand = _try_apostrophe(v)
-            if cand != v:
-                variants.append(cand)
 
     # ── 连字符处理 ────────────────────────────────────────────
     for v in list(variants):
@@ -221,8 +210,11 @@ def _extract_result(data: dict) -> Tuple[str, str, str, Optional[str], str]:
     summary   = data.get("Plot", "No summary available.")
     image_url = data.get("Poster", "")
     imdb_id   = data.get("imdbID")  # IMDb 官方 ID，用于去重
-    # 拼接 IMDb 官方片名+年份，覆盖 BT 站的原始标题
-    official_name = f"{data.get('Title', '')} {data.get('Year', '')}".strip()
+    # 用 IMDb 官方片名+年份覆盖 BT 站原始标题；
+    # 必须检查 Title 本身非空，否则 Title='' 时 official_name='2026' 会被误用
+    title_str = data.get("Title", "").strip()
+    year_str  = data.get("Year", "").strip()
+    official_name = f"{title_str} {year_str}".strip() if title_str else ""
     if not image_url or image_url == "N/A":
         image_url = "https://placehold.co/150x220?text=No+Poster"
     return rating, summary, image_url, imdb_id, official_name
@@ -341,8 +333,6 @@ def get_imdb_info(
     logger.debug(f"❌ 所有搜索均失败: {name}")
     return None, None, None, None, None
 
-
-from concurrent.futures import ThreadPoolExecutor, as_completed
 
 def _fetch_single_movie(name: str) -> Optional[Tuple[str, str, str, str, Optional[str], str]]:
     """线程工作函数：获取单部电影的 IMDb 信息。"""

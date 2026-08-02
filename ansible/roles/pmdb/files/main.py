@@ -4,6 +4,7 @@ from config_reader import CONFIG
 from translate_service import translate_texts
 from scraper import get_top100_with_fallback
 from movie_api_service import fetch_imdb_info_batch
+from html_generator import generate_html
 
 
 def dedup_by_imdb_id(results: list) -> list:
@@ -29,10 +30,6 @@ def dedup_by_imdb_id(results: list) -> list:
             if existing['rating'] == 'N/A' and r['rating'] != 'N/A':
                 unique[existing_idx] = r
     return unique
-
-
-from html_generator import generate_html
-
 
 
 def setup_logging():

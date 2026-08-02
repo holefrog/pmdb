@@ -7,6 +7,7 @@ import re
 import os
 import logging
 from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeout
+from bs4 import BeautifulSoup
 from config_reader import CONFIG
 
 logger = logging.getLogger(__name__)
@@ -92,7 +93,6 @@ def _fetch_from_url(url: str) -> list[str]:
         finally:
             browser.close()
 
-    from bs4 import BeautifulSoup
     soup = BeautifulSoup(html, "html.parser")
     list_items = soup.select("li.list-entry")
     logger.info(f"找到 {len(list_items)} 个条目")
