@@ -4,7 +4,35 @@ from config_reader import CONFIG
 from translate_service import translate_texts
 from scraper import get_top100_with_fallback
 from movie_api_service import fetch_imdb_info_batch
+
+
+def dedup_by_imdb_id(results: list) -> list:
+    """
+    按 imdbID 对 OMDb 命中的电影进行二次去重。
+    - 同一 imdbID 的多条记录 → 保留 rating 不为 N/A 的那条，都有评分则保留先到的。
+    - imdb_id 为 None 的（OMDb 未命中）→ 不参与去重，直接保留。
+    """
+    seen_ids: dict = {}
+    unique: list = []
+    for r in results:
+        iid = r.get('imdb_id')
+        if not iid:
+            unique.append(r)  # 未命中的保留原样
+            continue
+        if iid not in seen_ids:
+            seen_ids[iid] = len(unique)
+            unique.append(r)
+        else:
+            # 已有相同 ID：尝试用数据更完整的替换
+            existing_idx = seen_ids[iid]
+            existing = unique[existing_idx]
+            if existing['rating'] == 'N/A' and r['rating'] != 'N/A':
+                unique[existing_idx] = r
+    return unique
+
+
 from html_generator import generate_html
+
 
 
 def setup_logging():
@@ -53,19 +81,25 @@ def main():
         
         raw_results, failed_movies = fetch_imdb_info_batch(movie_list)
 
-        valid_count = len(raw_results)
         if not raw_results:
             logger.error("❌ 未能获取任何有效电影信息")
             return
 
-        logger.info(f"✅ 成功获取 {valid_count}/{len(movie_list)} 部电影信息")
-        
+        logger.info(f"✅ 成功获取 {len(raw_results)}/{len(movie_list)} 部电影信息")
+
         if failed_movies:
             logger.warning(f"\n⚠️ 以下 {len(failed_movies)} 部电影未找到信息：")
             for movie in failed_movies[:10]:
                 logger.warning(f"  - {movie}")
             if len(failed_movies) > 10:
                 logger.warning(f"  ... 还有 {len(failed_movies) - 10} 部未显示")
+
+        # ── IMDb ID 二次去重（合并同一部电影的不同 BT 站条目）────
+        before_dedup = len(raw_results)
+        raw_results = dedup_by_imdb_id(raw_results)
+        valid_count = len(raw_results)
+        if valid_count < before_dedup:
+            logger.info(f"🔁 IMDb ID 去重：{before_dedup} → {valid_count} 部（合并了 {before_dedup - valid_count} 条重复）")
 
         # ── 步骤 4：批量翻译 ─────────────────────────────────────
         logger.info(f"\n[步骤 4/4] 使用 {provider} 批量翻译简介...")

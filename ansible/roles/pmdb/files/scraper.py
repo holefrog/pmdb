@@ -15,6 +15,8 @@ logger = logging.getLogger(__name__)
 def _normalize_for_dedup(title: str) -> str:
     t = title.lower().strip()
     t = re.sub(r'\band\b', '&', t)
+    t = re.sub(r"[:'\",.!?]", '', t)   # 去除冒号等标点（BT站常省略）
+    t = t.replace('-', ' ')             # 连字符→空格（Spider-Man → spider man）
     t = re.sub(r'\s+', ' ', t).strip()
     return t
 
