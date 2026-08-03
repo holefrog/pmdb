@@ -54,13 +54,13 @@ nvidia_endpoint: "https://integrate.api.nvidia.com/v1/chat/completions"
 gemini_endpoint: "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
 
 # YTS API 默认排序方式 (date_added: 最新, rating: 高分, seeds: 最热下载, download_count: 历史总计)
-yts_sort_by: "year"
+yts_sort_by: "rating"
 # YTS 画质过滤 (720p / 1080p / 2160p / 3D)，默认 1080p 排除 CAM/TS
 yts_quality: "1080p"
 # YTS 最低 IMDb 评分（0-9），在 YTS 侧过滤冷门低分外语片，默认 6.5
 yts_minimum_rating: 6
 # OMDb 最低 Metascore 评分 (0-100)，用于过滤刷榜片，默认 40
-yts_minimum_metascore: 30
+yts_minimum_metascore: 20
 
 # 爬虫源 (按优先级排序)
 scraper_urls:
