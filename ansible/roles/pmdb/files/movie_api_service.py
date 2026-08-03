@@ -162,6 +162,54 @@ def _build_search_queries(title: str, year: Optional[str]) -> List[Tuple[str, Op
     return unique
 
 
+def _get_ai_imdb_id(
+    name: str,
+    session: requests.Session,
+    timeout: int
+) -> Optional[str]:
+    """使用配置的 AI 服务推理 IMDb ID（AI 兜底查询）。"""
+    # AI 兜底固定用 Mistral（最稳定，有 JSON mode）
+    api_key = CONFIG.get("mistral_api_key")
+    if not api_key:
+        return None
+
+    model = CONFIG.get("imdb_lookup_model", "mistral-small-latest")
+    endpoint = CONFIG.get("mistral_endpoint", "https://api.mistral.ai/v1/chat/completions")
+    prompt = (
+        f"Find the official IMDb ID for the movie currently titled '{name}'. "
+        "Note: This title might contain extra franchise names, incorrect release years, "
+        "or be a working title from a torrent release. "
+        "Please infer the correct official movie and return its exact IMDb ID. "
+        "Reply ONLY with the IMDb ID (starting with 'tt' followed by numbers). "
+        "Do not output any other text, explanation, or punctuation. "
+        "If you don't know, reply with 'UNKNOWN'."
+    )
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+    }
+    payload = {
+        "model": model,
+        "messages": [{"role": "user", "content": prompt}],
+        "temperature": 0.1,
+    }
+    try:
+        resp = session.post(
+            endpoint,
+            headers=headers,
+            json=payload,
+            timeout=timeout
+        )
+        resp.raise_for_status()
+        content = resp.json()['choices'][0]['message']['content'].strip()
+        logger.info(f"🤖 AI 兜底 '{name}' → {content}")
+        match = re.search(r'tt\d{7,10}', content)
+        return match.group(0) if match else None
+    except Exception as e:
+        logger.debug(f"AI 兜底失败: {e}")
+        return None
+
+
 def _fetch_omdb_by_id(
     imdb_id: str,
     omdb_api_key: str,
@@ -302,9 +350,23 @@ def _do_get_imdb_info(
         except Exception as e:
             logger.debug(f"模糊搜索异常: {e}")
             continue
-
-
-
+    # ── 阶段 3：AI 推理兜底 ───────────────────────────────────
+    logger.debug(f"🤖 所有搜索失败，尝试 AI 兜底: '{name}'")
+    ai_imdb_id = _get_ai_imdb_id(name, session, timeout)
+    if ai_imdb_id:
+        try:
+            data = _fetch_omdb_by_id(ai_imdb_id, omdb_api_key, session, timeout, _delay())
+            if data:
+                rating, summary, image_url, _, official_name, metascore = _extract_result(data)
+                if rating and summary:
+                    logger.debug(f"✅ AI 兜底命中: '{name}' → {ai_imdb_id}")
+                    return rating, summary, image_url, ai_imdb_id, official_name, metascore
+        except requests.HTTPError as e:
+            if e.response is not None and e.response.status_code == 401:
+                raise e
+            logger.debug(f"AI 兜底 OMDb 验证异常: {e}")
+        except Exception as e:
+            logger.debug(f"AI 兜底 OMDb 验证异常: {e}")
     logger.debug(f"❌ 所有搜索均失败: {name}")
     return None, None, None, None, None, None
 

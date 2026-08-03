@@ -61,13 +61,13 @@ retry_delay_max = {{ retry_delay_max | mandatory }}
 
 [Sources]
 # YTS 排序方式 (date_added: 最新, rating: 高分, seeds: 当前最热, download_count: 历史总计)
-yts_sort_by = {{ yts_sort_by | default('date_added') }}
-# YTS 质量过滤 (1080p, 720p, 3D, 2160p). 默认 1080p，避免低清/CAM
-yts_quality = {{ yts_quality | default('1080p') }}
-# YTS 最低 IMDb 评分过滤，默认 7，避免低分电影
-yts_minimum_rating = {{ yts_minimum_rating | default('7') }}
-# OMDb 最低 Metascore 过滤，默认 40
-yts_minimum_metascore = {{ yts_minimum_metascore | default('40') }}
+yts_sort_by = {{ yts_sort_by | mandatory }}
+# YTS 质量过滤 (1080p, 720p, 3D, 2160p)
+yts_quality = {{ yts_quality | mandatory }}
+# YTS 最低 IMDb 评分过滤
+yts_minimum_rating = {{ yts_minimum_rating | mandatory }}
+# OMDb 最低 Metascore 过滤
+yts_minimum_metascore = {{ yts_minimum_metascore | mandatory }}
 
 # 爬虫来源 URL 列表（逗号分隔，按优先级排序）
 scraper_urls = {% for url in scraper_urls | mandatory %}{{ url }}{% if not loop.last %},{% endif %}{% endfor %}
