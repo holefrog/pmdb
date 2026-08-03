@@ -128,23 +128,36 @@ def _dedup_movies(raw_names: list[str]) -> list[str]:
 
 
 def _fetch_from_yts() -> list[str]:
-    url = "https://yts.mx/api/v2/list_movies.json"
-    movies = []
-    # 抓取前两页（总计100部电影）
-    for page in [1, 2]:
-        params = {
-            "limit": 50,
-            "sort_by": "download_count",
-            "page": page
-        }
-        resp = requests.get(url, params=params, timeout=15)
-        resp.raise_for_status()
-        data = resp.json()
-        
-        if data.get("status") == "ok" and "movies" in data.get("data", {}):
-            for movie in data["data"]["movies"]:
-                movies.append(f"{movie['title']} {movie['year']}")
-    return movies
+    # YTS 域名经常被墙或 DNS 污染，提供几个备选
+    domains = ["yts.mx", "yts.rs", "yts.do", "yts.pm"]
+    
+    for domain in domains:
+        url = f"https://{domain}/api/v2/list_movies.json"
+        movies = []
+        try:
+            # 抓取前两页（总计100部电影）
+            for page in [1, 2]:
+                params = {
+                    "limit": 50,
+                    "sort_by": "download_count",
+                    "page": page
+                }
+                resp = requests.get(url, params=params, timeout=10)
+                resp.raise_for_status()
+                data = resp.json()
+                
+                if data.get("status") == "ok" and "movies" in data.get("data", {}):
+                    for movie in data["data"]["movies"]:
+                        movies.append(f"{movie['title']} {movie['year']}")
+            if movies:
+                logger.info(f"✅ 成功连接 YTS 节点: {domain}")
+                return movies
+        except requests.exceptions.RequestException:
+            logger.debug(f"YTS 节点 {domain} 连接失败，尝试下一个...")
+            continue
+            
+    # 如果全部失败，抛出异常让外部接管 fallback
+    raise ConnectionError("所有 YTS 节点均连接失败 (可能被 DNS 污染)")
 
 
 def get_top100_with_fallback() -> list[str]:
