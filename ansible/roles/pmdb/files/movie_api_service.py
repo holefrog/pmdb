@@ -278,7 +278,7 @@ def get_imdb_info(
             data = resp.json()
             if data.get("Response") == "True":
                 rating, summary, image_url, imdb_id, official_name = _extract_result(data)
-                if rating == "N/A" and summary == "No summary available.":
+                if rating == "N/A" or summary in ("N/A", "No summary available."):
                     logger.debug(f"找到但数据为空: '{search_title}' (y={search_year})")
                     continue
                 logger.debug(f"✅ 精确命中: '{search_title}' (y={search_year})")
