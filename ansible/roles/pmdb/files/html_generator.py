@@ -58,7 +58,8 @@ _FALLBACK_HTML = """\
     <div class="container">
     {% for movie in movies %}
     <div class="movie-item">
-        <img src='{{ movie.image_url }}' alt='{{ movie.name }}' ondblclick="openImage('{{ movie.image_url }}')">
+        {% set img = movie.image_url if movie.image_url and movie.image_url != 'N/A' else 'https://via.placeholder.com/300x445?text=No+Poster' %}
+        <img src='{{ img }}' alt='{{ movie.name }}' ondblclick="openImage('{{ img }}')" onerror="this.src='https://via.placeholder.com/300x445?text=No+Poster'">
         <div class="movie-content">
             <div class="movie-title">{{ movie.name }}</div>
             {% set r = movie.rating | float(default=0.0) %}

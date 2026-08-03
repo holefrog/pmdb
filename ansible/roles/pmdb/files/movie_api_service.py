@@ -14,6 +14,7 @@ from config_reader import CONFIG
 # 免费注册 OMDb Key: https://www.omdbapi.com/apikey.aspx （每天1000次，够用）
 
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
 
 # 种子文件中常见的噪声标签（去掉后才是干净的标题）
 NOISE_PATTERNS = [
@@ -278,18 +279,18 @@ def get_imdb_info(
             data = resp.json()
             if data.get("Response") == "True":
                 rating, summary, image_url, imdb_id, official_name = _extract_result(data)
-                if rating == "N/A" or summary in ("N/A", "No summary available."):
-                    logger.debug(f"找到但数据为空: '{search_title}' (y={search_year})")
+                if summary in ("N/A", "No summary available.", None, ""):
+                    logger.debug(f"找到但简介为空: '{search_title}' (y={search_year})，继续尝试")
                     continue
                 logger.debug(f"✅ 精确命中: '{search_title}' (y={search_year})")
                 return rating, summary, image_url, imdb_id, official_name
             else:
                 logger.debug(f"OMDb 未命中: '{search_title}' (y={search_year}) → {data.get('Error')}")
         except (requests.ConnectionError, requests.Timeout, requests.HTTPError) as e:
-            logger.debug(f"网络错误 [{name}]: {e}")
+            logger.warning(f"网络错误 [{name}]: {e}")
             return None, None, None, None, None
         except Exception as e:
-            logger.debug(f"未知错误 [{name}]: {e}")
+            logger.warning(f"未知错误 [{name}]: {e}")
             return None, None, None, None, None
 
     # ── 阶段 2：模糊搜索（s=）────────────────────────────────
