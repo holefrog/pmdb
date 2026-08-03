@@ -1,5 +1,7 @@
 import requests
 import re
+import os
+import sys
 import time
 import random
 import logging
@@ -14,7 +16,6 @@ from config_reader import CONFIG
 # 免费注册 OMDb Key: https://www.omdbapi.com/apikey.aspx （每天1000次，够用）
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
 
 # 种子文件中常见的噪声标签（去掉后才是干净的标题）
 NOISE_PATTERNS = [
@@ -286,7 +287,13 @@ def get_imdb_info(
                 return rating, summary, image_url, imdb_id, official_name
             else:
                 logger.debug(f"OMDb 未命中: '{search_title}' (y={search_year}) → {data.get('Error')}")
-        except (requests.ConnectionError, requests.Timeout, requests.HTTPError) as e:
+        except requests.HTTPError as e:
+            if e.response is not None and e.response.status_code == 401:
+                logger.error(f"❌ 致命错误：OMDb API Key 每日额度已耗尽或无效 (HTTP 401)。请前往 https://www.omdbapi.com/apikey.aspx 申请新 Key，并在 ansible/secrets.yml 中更新！")
+                os._exit(1)
+            logger.warning(f"网络错误 [{name}]: {e}")
+            return None, None, None, None, None
+        except (requests.ConnectionError, requests.Timeout) as e:
             logger.warning(f"网络错误 [{name}]: {e}")
             return None, None, None, None, None
         except Exception as e:

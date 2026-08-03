@@ -37,7 +37,12 @@ imdb_lookup_model = {{ imdb_lookup_model | mandatory }}
 
 [OMDb_API]
 # OMDb API 密钥
-OMDB_KEY = {{ omdb_api_key | mandatory }}
+# 支持新版列表配置 omdb_api_keys，也兼容旧版字符串配置 omdb_api_key
+{% if omdb_api_keys is defined %}
+OMDB_KEYS = {{ omdb_api_keys | join(',') if omdb_api_keys is iterable and omdb_api_keys is not string else omdb_api_keys }}
+{% else %}
+OMDB_KEYS = {{ omdb_api_key | default('') }}
+{% endif %}
 
 
 [Settings]
