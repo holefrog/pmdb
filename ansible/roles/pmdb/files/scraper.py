@@ -138,23 +138,37 @@ def _fetch_from_yts() -> list[str]:
         url = f"https://{domain}/api/v2/list_movies.json"
         movies = []
         try:
+            # 从配置读取过滤参数
+            sort_by     = CONFIG.get("yts_sort_by", "date_added")
+            quality     = CONFIG.get("yts_quality", "1080p")
+            min_rating  = CONFIG.get("yts_minimum_rating", 6.0)
+
             # 抓取前两页（总计100部电影）
-            sort_by = CONFIG.get("yts_sort_by", "date_added")
             for page in [1, 2]:
                 params = {
                     "limit": 50,
                     "sort_by": sort_by,
+                    "quality": quality,           # 只要高清，排除 CAM/TS
+                    "minimum_rating": int(min_rating),  # 低分/冷门外语片 YTS 侧直接过滤
                     "page": page
                 }
                 resp = requests.get(url, params=params, timeout=10)
                 resp.raise_for_status()
                 data = resp.json()
-                
+
                 if data.get("status") == "ok" and "movies" in data.get("data", {}):
                     for movie in data["data"]["movies"]:
                         movies.append(f"{movie['title']} {movie['year']}")
+
+            # 额外过滤非 ASCII 标题（防止 OMDb 查询失败）
+            before = len(movies)
+            movies = [m for m in movies if all(ord(ch) < 128 for ch in m)]
+            filtered = before - len(movies)
+            if filtered:
+                logger.info(f"🔤 已过滤 {filtered} 个非英语标题")
+
             if movies:
-                logger.info(f"✅ 成功连接 YTS 节点: {domain}")
+                logger.info(f"✅ 成功连接 YTS 节点: {domain}，共 {len(movies)} 部")
                 return movies
         except requests.exceptions.RequestException:
             logger.debug(f"YTS 节点 {domain} 连接失败，尝试下一个...")
