@@ -2,6 +2,7 @@ import requests
 import re
 import os
 import sys
+import threading
 import time
 import random
 import logging
@@ -16,6 +17,29 @@ from config_reader import CONFIG
 # 免费注册 OMDb Key: https://www.omdbapi.com/apikey.aspx （每天1000次，够用）
 
 logger = logging.getLogger(__name__)
+
+class OMDBKeyManager:
+    def __init__(self, keys: List[str]):
+        self.keys = keys
+        self.current_idx = 0
+        self.lock = threading.Lock()
+
+    def get_key(self) -> Optional[str]:
+        with self.lock:
+            if self.current_idx < len(self.keys):
+                return self.keys[self.current_idx]
+            return None
+
+    def mark_exhausted(self, key: str):
+        with self.lock:
+            if self.current_idx < len(self.keys) and self.keys[self.current_idx] == key:
+                self.current_idx += 1
+                if self.current_idx < len(self.keys):
+                    logger.warning(f"⚠️ OMDb Key ({key}) 额度耗尽或无效，自动切换到下一个 Key: {self.keys[self.current_idx]}")
+                else:
+                    logger.error("❌ 致命错误：所有 OMDb API Key 额度均已耗尽 (HTTP 401)！")
+
+key_manager = OMDBKeyManager(CONFIG.get("omdb_api_keys", []))
 
 # 种子文件中常见的噪声标签（去掉后才是干净的标题）
 NOISE_PATTERNS = [
@@ -222,8 +246,9 @@ def _extract_result(data: dict) -> Tuple[str, str, str, Optional[str], str]:
     return rating, summary, image_url, imdb_id, official_name
 
 
-def get_imdb_info(
-    name: str
+def _do_get_imdb_info(
+    name: str,
+    omdb_api_key: str
 ) -> Tuple[Optional[str], Optional[str], Optional[str], Optional[str], Optional[str]]:
     """
     使用 OMDb API 获取电影信息，四阶段搜索策略：
@@ -238,11 +263,6 @@ def get_imdb_info(
     Returns:
         (rating, summary, image_url, imdb_id, official_name) 或 (None, None, None, None, None)
     """
-    omdb_api_key = CONFIG.get("omdb_api_key")
-    if not omdb_api_key:
-        logger.error("❌ 未找到 OMDb API 密钥")
-        return None, None, None, None, None
-
     # 拆分 "Title Year"
     parts = name.rsplit(" ", 1)
     title = parts[0]
@@ -289,8 +309,7 @@ def get_imdb_info(
                 logger.debug(f"OMDb 未命中: '{search_title}' (y={search_year}) → {data.get('Error')}")
         except requests.HTTPError as e:
             if e.response is not None and e.response.status_code == 401:
-                logger.error(f"❌ 致命错误：OMDb API Key 每日额度已耗尽或无效 (HTTP 401)。请前往 https://www.omdbapi.com/apikey.aspx 申请新 Key，并在 ansible/secrets.yml 中更新！")
-                os._exit(1)
+                raise e
             logger.warning(f"网络错误 [{name}]: {e}")
             return None, None, None, None, None
         except (requests.ConnectionError, requests.Timeout) as e:
@@ -321,6 +340,11 @@ def get_imdb_info(
                         rating, summary, image_url, imdb_id, official_name = _extract_result(data)
                         logger.debug(f"✅ 模糊命中: '{fuzzy_title}' → {imdb_id}")
                         return rating, summary, image_url, imdb_id, official_name
+        except requests.HTTPError as e:
+            if e.response is not None and e.response.status_code == 401:
+                raise e
+            logger.debug(f"模糊搜索异常: {e}")
+            continue
         except Exception as e:
             logger.debug(f"模糊搜索异常: {e}")
             continue
@@ -335,11 +359,30 @@ def get_imdb_info(
                 rating, summary, image_url, imdb_id, official_name = _extract_result(data)
                 logger.debug(f"✅ AI 兜底命中: '{name}' → {imdb_id}")
                 return rating, summary, image_url, imdb_id, official_name
+        except requests.HTTPError as e:
+            if e.response is not None and e.response.status_code == 401:
+                raise e
+            logger.debug(f"AI 兜底 OMDb 验证异常: {e}")
         except Exception as e:
             logger.debug(f"AI 兜底 OMDb 验证异常: {e}")
 
     logger.debug(f"❌ 所有搜索均失败: {name}")
     return None, None, None, None, None
+
+
+def get_imdb_info(name: str) -> Tuple[Optional[str], Optional[str], Optional[str], Optional[str], Optional[str]]:
+    while True:
+        api_key = key_manager.get_key()
+        if not api_key:
+            os._exit(1)
+        try:
+            return _do_get_imdb_info(name, api_key)
+        except requests.HTTPError as e:
+            if e.response is not None and e.response.status_code == 401:
+                key_manager.mark_exhausted(api_key)
+                continue
+            logger.warning(f"网络错误 [{name}]: {e}")
+            return None, None, None, None, None
 
 
 def _fetch_single_movie(name: str) -> Optional[Tuple[str, str, str, str, Optional[str], str]]:

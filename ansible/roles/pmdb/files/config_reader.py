@@ -67,12 +67,13 @@ def _load_config(config_file: str = "config.ini") -> dict:
             logger.error("❌ 配置文件中缺少 [OMDb_API] 部分")
             sys.exit(1)
 
-        omdb_key = config["OMDb_API"].get("OMDB_KEY", "").strip()
-        if not omdb_key or omdb_key.startswith("<YOUR_"):
-            logger.error("❌ OMDb API 密钥无效或未填写 (OMDB_KEY)")
+        raw_omdb_keys = config["OMDb_API"].get("OMDB_KEYS", config["OMDb_API"].get("OMDB_KEY", "")).strip()
+        omdb_keys = [k.strip() for k in raw_omdb_keys.split(',') if k.strip() and not k.strip().startswith("<YOUR_")]
+        if not omdb_keys:
+            logger.error("❌ OMDb API 密钥无效或未填写 (OMDB_KEYS)")
             sys.exit(1)
-        result['omdb_api_key'] = omdb_key
-        logger.info("✅ OMDb API 密钥已加载")
+        result['omdb_api_keys'] = omdb_keys
+        logger.info(f"✅ OMDb API 密钥已加载，共 {len(omdb_keys)} 个")
 
         # ── [Settings] section ───────────────────────────────────────────────
         if "Settings" not in config:
