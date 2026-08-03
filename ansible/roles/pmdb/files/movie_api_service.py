@@ -390,6 +390,15 @@ def _fetch_single_movie(name: str) -> Optional[Tuple[str, str, str, str, Optiona
     rating, summary, image_url, imdb_id, official_name = get_imdb_info(name)
     # image_url 可能为空（OMDb 新片海报未收录），不纳入必要条件
     if rating and summary:
+        # 在拿到 OMDb 实时评分后，进行二次严格校验
+        min_rating = CONFIG.get("yts_minimum_rating", 0.0)
+        if rating != "N/A":
+            try:
+                if float(rating) < min_rating:
+                    logger.debug(f"过滤低分电影: '{name}' 实时评分 {rating} 低于最低要求 {min_rating}")
+                    return None
+            except ValueError:
+                pass
         return name, rating, summary, image_url, imdb_id, official_name
     return None
 
