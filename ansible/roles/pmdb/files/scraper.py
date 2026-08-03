@@ -6,6 +6,7 @@
 import re
 import os
 import logging
+import requests
 from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeout
 from bs4 import BeautifulSoup
 from config_reader import CONFIG
@@ -126,14 +127,47 @@ def _dedup_movies(raw_names: list[str]) -> list[str]:
     return result
 
 
+def _fetch_from_yts() -> list[str]:
+    url = "https://yts.mx/api/v2/list_movies.json"
+    movies = []
+    # 抓取前两页（总计100部电影）
+    for page in [1, 2]:
+        params = {
+            "limit": 50,
+            "sort_by": "download_count",
+            "page": page
+        }
+        resp = requests.get(url, params=params, timeout=15)
+        resp.raise_for_status()
+        data = resp.json()
+        
+        if data.get("status") == "ok" and "movies" in data.get("data", {}):
+            for movie in data["data"]["movies"]:
+                movies.append(f"{movie['title']} {movie['year']}")
+    return movies
+
+
 def get_top100_with_fallback() -> list[str]:
     """
     获取 Top 100 电影列表，支持多源 Fallback。
-    必须从 CONFIG 中读取 scraper_urls。
+    首选 YTS API，失败后从 CONFIG 中读取 scraper_urls 作为备用。
     """
+    # 1. 首选 YTS API
+    try:
+        logger.info("[首选源] 尝试 YTS API (https://yts.mx/api/v2/list_movies.json)")
+        movies = _fetch_from_yts()
+        if movies:
+            logger.info(f"✅ 成功从 YTS API 获取 {len(movies)} 部电影")
+            return movies
+        else:
+            logger.warning("⚠️ YTS API 返回空列表，尝试配置的 fallback 源")
+    except Exception as e:
+        logger.warning(f"⚠️ YTS API 失败 ({type(e).__name__}: {e})，尝试配置的 fallback 源")
+
+    # 2. 备用：传统网页抓取
     urls = CONFIG.get("scraper_urls", [])
     if not urls:
-        logger.error("❌ config.ini 中未配置 scraper_urls。无法继续。")
+        logger.error("❌ config.ini 中未配置 scraper_urls，且首选源失败。无法继续。")
         return []
 
     for i, url in enumerate(urls):
