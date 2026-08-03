@@ -107,7 +107,8 @@ def _load_config(config_file: str = "config.ini") -> dict:
         result['yts_sort_by'] = config["Sources"].get("yts_sort_by", "date_added").strip()
         result['yts_quality'] = config["Sources"].get("yts_quality", "1080p").strip()
         result['yts_minimum_rating'] = float(config["Sources"].get("yts_minimum_rating", "7").strip())
-        logger.info(f"✅ 爬虫源已加载: {len(urls)} 个 URL, YTS 排序: {result['yts_sort_by']}, 质量: {result['yts_quality']}, 最低评分: {result['yts_minimum_rating']}")
+        result['yts_minimum_metascore'] = int(config["Sources"].get("yts_minimum_metascore", "40").strip())
+        logger.info(f"✅ 爬虫源已加载: {len(urls)} 个 URL, YTS 排序: {result['yts_sort_by']}, 质量: {result['yts_quality']}, 最低评分: {result['yts_minimum_rating']}, 最低Metascore: {result['yts_minimum_metascore']}")
 
         logger.info(
             f"✅ 配置全部加载成功: provider={provider}, "

@@ -162,54 +162,6 @@ def _build_search_queries(title: str, year: Optional[str]) -> List[Tuple[str, Op
     return unique
 
 
-def _get_ai_imdb_id(
-    name: str,
-    session: requests.Session,
-    timeout: int
-) -> Optional[str]:
-    """使用配置的 AI 服务推理 IMDb ID（AI 兜底查询）。"""
-    # AI 兜底固定用 Mistral（最稳定，有 JSON mode）
-    api_key = CONFIG["mistral_api_key"]
-    if not api_key:
-        return None
-
-    model = CONFIG["imdb_lookup_model"]
-    endpoint = CONFIG["mistral_endpoint"]
-    prompt = (
-        f"Find the official IMDb ID for the movie currently titled '{name}'. "
-        "Note: This title might contain extra franchise names, incorrect release years, "
-        "or be a working title from a torrent release. "
-        "Please infer the correct official movie and return its exact IMDb ID. "
-        "Reply ONLY with the IMDb ID (starting with 'tt' followed by numbers). "
-        "Do not output any other text, explanation, or punctuation. "
-        "If you don't know, reply with 'UNKNOWN'."
-    )
-    headers = {
-        "Authorization": f"Bearer {api_key}",
-        "Content-Type": "application/json",
-    }
-    payload = {
-        "model": model,
-        "messages": [{"role": "user", "content": prompt}],
-        "temperature": 0.1,
-    }
-    try:
-        resp = session.post(
-            endpoint,
-            headers=headers,
-            json=payload,
-            timeout=timeout
-        )
-        resp.raise_for_status()
-        content = resp.json()['choices'][0]['message']['content'].strip()
-        logger.info(f"🤖 AI 兜底 '{name}' → {content}")
-        match = re.search(r'tt\d{7,10}', content)
-        return match.group(0) if match else None
-    except Exception as e:
-        logger.debug(f"AI 兜底失败: {e}")
-        return None
-
-
 def _fetch_omdb_by_id(
     imdb_id: str,
     omdb_api_key: str,
@@ -243,13 +195,15 @@ def _extract_result(data: dict) -> Tuple[str, str, str, Optional[str], str]:
     official_name = f"{title_str} {year_str}".strip() if title_str else ""
     if not image_url or image_url == "N/A":
         image_url = "https://placehold.co/150x220?text=No+Poster"
-    return rating, summary, image_url, imdb_id, official_name
+    
+    metascore = data.get("Metascore", "N/A")
+    return rating, summary, image_url, imdb_id, official_name, metascore
 
 
 def _do_get_imdb_info(
     name: str,
     omdb_api_key: str
-) -> Tuple[Optional[str], Optional[str], Optional[str], Optional[str], Optional[str]]:
+) -> Tuple[Optional[str], Optional[str], Optional[str], Optional[str], Optional[str], Optional[str]]:
     """
     使用 OMDb API 获取电影信息，四阶段搜索策略：
     1. 精确 title+year 搜索（多变体 × 年份±1）
@@ -270,7 +224,7 @@ def _do_get_imdb_info(
 
     if not year:
         logger.warning(f"跳过 '{name}' - 缺少年份")
-        return None, None, None, None, None
+        return None, None, None, None, None, None
 
     session = get_session_with_retries()
     timeout = CONFIG["request_timeout"]
@@ -299,25 +253,25 @@ def _do_get_imdb_info(
             resp.raise_for_status()
             data = resp.json()
             if data.get("Response") == "True":
-                rating, summary, image_url, imdb_id, official_name = _extract_result(data)
+                rating, summary, image_url, imdb_id, official_name, metascore = _extract_result(data)
                 if summary in ("N/A", "No summary available.", None, ""):
                     logger.debug(f"找到但简介为空: '{search_title}' (y={search_year})，继续尝试")
                     continue
                 logger.debug(f"✅ 精确命中: '{search_title}' (y={search_year})")
-                return rating, summary, image_url, imdb_id, official_name
+                return rating, summary, image_url, imdb_id, official_name, metascore
             else:
                 logger.debug(f"OMDb 未命中: '{search_title}' (y={search_year}) → {data.get('Error')}")
         except requests.HTTPError as e:
             if e.response is not None and e.response.status_code == 401:
                 raise e
             logger.warning(f"网络错误 [{name}]: {e}")
-            return None, None, None, None, None
+            return None, None, None, None, None, None
         except (requests.ConnectionError, requests.Timeout) as e:
             logger.warning(f"网络错误 [{name}]: {e}")
-            return None, None, None, None, None
+            return None, None, None, None, None, None
         except Exception as e:
             logger.warning(f"未知错误 [{name}]: {e}")
-            return None, None, None, None, None
+            return None, None, None, None, None, None
 
     # ── 阶段 2：模糊搜索（s=）────────────────────────────────
     cleaned = clean_title_for_search(title)
@@ -337,9 +291,9 @@ def _do_get_imdb_info(
                 if imdb_id:
                     data = _fetch_omdb_by_id(imdb_id, omdb_api_key, session, timeout, _delay())
                     if data:
-                        rating, summary, image_url, imdb_id, official_name = _extract_result(data)
+                        rating, summary, image_url, imdb_id, official_name, metascore = _extract_result(data)
                         logger.debug(f"✅ 模糊命中: '{fuzzy_title}' → {imdb_id}")
-                        return rating, summary, image_url, imdb_id, official_name
+                        return rating, summary, image_url, imdb_id, official_name, metascore
         except requests.HTTPError as e:
             if e.response is not None and e.response.status_code == 401:
                 raise e
@@ -349,28 +303,13 @@ def _do_get_imdb_info(
             logger.debug(f"模糊搜索异常: {e}")
             continue
 
-    # ── 阶段 3：AI 推理兜底 ───────────────────────────────────
-    logger.debug(f"🤖 所有搜索失败，尝试 AI 兜底: '{name}'")
-    imdb_id = _get_ai_imdb_id(name, session, timeout)
-    if imdb_id:
-        try:
-            data = _fetch_omdb_by_id(imdb_id, omdb_api_key, session, timeout, _delay())
-            if data:
-                rating, summary, image_url, imdb_id, official_name = _extract_result(data)
-                logger.debug(f"✅ AI 兜底命中: '{name}' → {imdb_id}")
-                return rating, summary, image_url, imdb_id, official_name
-        except requests.HTTPError as e:
-            if e.response is not None and e.response.status_code == 401:
-                raise e
-            logger.debug(f"AI 兜底 OMDb 验证异常: {e}")
-        except Exception as e:
-            logger.debug(f"AI 兜底 OMDb 验证异常: {e}")
+
 
     logger.debug(f"❌ 所有搜索均失败: {name}")
-    return None, None, None, None, None
+    return None, None, None, None, None, None
 
 
-def get_imdb_info(name: str) -> Tuple[Optional[str], Optional[str], Optional[str], Optional[str], Optional[str]]:
+def get_imdb_info(name: str) -> Tuple[Optional[str], Optional[str], Optional[str], Optional[str], Optional[str], Optional[str]]:
     while True:
         api_key = key_manager.get_key()
         if not api_key:
@@ -382,12 +321,12 @@ def get_imdb_info(name: str) -> Tuple[Optional[str], Optional[str], Optional[str
                 key_manager.mark_exhausted(api_key)
                 continue
             logger.warning(f"网络错误 [{name}]: {e}")
-            return None, None, None, None, None
+            return None, None, None, None, None, None
 
 
 def _fetch_single_movie(name: str) -> Optional[Tuple[str, str, str, str, Optional[str], str]]:
     """线程工作函数：获取单部电影的 IMDb 信息。"""
-    rating, summary, image_url, imdb_id, official_name = get_imdb_info(name)
+    rating, summary, image_url, imdb_id, official_name, metascore = get_imdb_info(name)
     # image_url 可能为空（OMDb 新片海报未收录），不纳入必要条件
     if rating and summary:
         # 在拿到 OMDb 实时评分后，进行二次严格校验
@@ -405,6 +344,21 @@ def _fetch_single_movie(name: str) -> Optional[Tuple[str, str, str, str, Optiona
                 return None
         except ValueError:
             pass
+            
+        # 增加 Metascore 过滤 (免疫粉丝刷榜)
+        # Metascore 通常是 0-100，这里我们设定的及格线是 CONFIG 中的配置。低于该值或 N/A（查无此评分）丢弃。
+        min_metascore = CONFIG.get("yts_minimum_metascore", 40)
+        
+        if metascore == "N/A":
+            logger.debug(f"过滤无 Metascore 评分电影: '{name}' (可能为非院线主流电影/刷榜片)")
+            return None
+        try:
+            if int(metascore) < min_metascore:
+                logger.debug(f"过滤低 Metascore 电影: '{name}' ({metascore} < {min_metascore})")
+                return None
+        except ValueError:
+            pass
+            
         return name, rating, summary, image_url, imdb_id, official_name
     return None
 
