@@ -35,7 +35,7 @@ def dedup_by_imdb_id(results: list) -> list:
 def setup_logging():
     """配置日志：同时输出到文件和控制台。"""
     logging.basicConfig(
-        level=logging.INFO,
+        level=logging.DEBUG,
         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
         handlers=[
             logging.FileHandler('pmdb.log', encoding='utf-8'),
