@@ -57,7 +57,7 @@ gemini_endpoint: "https://generativelanguage.googleapis.com/v1beta/models/{model
 yts_sort_by: "year"
 # YTS 画质过滤 (720p / 1080p / 2160p / 3D)，默认 1080p 排除 CAM/TS
 yts_quality: "1080p"
-# YTS 最低 IMDb 评分（0-9），在 YTS 侧过滤冷门低分外语片，默认 7
+# YTS 最低 IMDb 评分（0-9），在 YTS 侧过滤冷门低分外语片，默认 6.5
 yts_minimum_rating: 6.5
 # OMDb 最低 Metascore 评分 (0-100)，用于过滤刷榜片，默认 40
 yts_minimum_metascore: 40

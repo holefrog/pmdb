@@ -104,10 +104,15 @@ def _load_config(config_file: str = "config.ini") -> dict:
             sys.exit(1)
             
         result['scraper_urls'] = urls
-        result['yts_sort_by'] = config["Sources"].get("yts_sort_by", "date_added").strip()
-        result['yts_quality'] = config["Sources"].get("yts_quality", "1080p").strip()
-        result['yts_minimum_rating'] = float(config["Sources"].get("yts_minimum_rating", "7").strip())
-        result['yts_minimum_metascore'] = int(config["Sources"].get("yts_minimum_metascore", "40").strip())
+        for key in ['yts_sort_by', 'yts_quality', 'yts_minimum_rating', 'yts_minimum_metascore']:
+            if not config["Sources"].get(key, "").strip():
+                logger.error(f"❌ 缺少必填 [Sources] 配置项: {key}")
+                sys.exit(1)
+                
+        result['yts_sort_by'] = config["Sources"].get("yts_sort_by").strip()
+        result['yts_quality'] = config["Sources"].get("yts_quality").strip()
+        result['yts_minimum_rating'] = float(config["Sources"].get("yts_minimum_rating").strip())
+        result['yts_minimum_metascore'] = int(config["Sources"].get("yts_minimum_metascore").strip())
         logger.info(f"✅ 爬虫源已加载: {len(urls)} 个 URL, YTS 排序: {result['yts_sort_by']}, 质量: {result['yts_quality']}, 最低评分: {result['yts_minimum_rating']}, 最低Metascore: {result['yts_minimum_metascore']}")
 
         logger.info(
