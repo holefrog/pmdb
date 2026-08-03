@@ -53,6 +53,9 @@ groq_endpoint: "https://api.groq.com/openai/v1/chat/completions"
 nvidia_endpoint: "https://integrate.api.nvidia.com/v1/chat/completions"
 gemini_endpoint: "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
 
+# YTS API 默认排序方式 (date_added: 最新, rating: 高分, seeds: 最热下载, download_count: 历史总计)
+yts_sort_by: "date_added"
+
 # 爬虫源 (按优先级排序)
 scraper_urls:
   - "https://thepiratebay.org/search.php?q=top100:207"

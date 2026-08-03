@@ -59,5 +59,8 @@ retry_delay_max = {{ retry_delay_max | mandatory }}
 
 
 [Sources]
+# YTS 排序方式 (date_added: 最新资源, rating: 高分排行, seeds: 当前最热, download_count: 历史总榜)
+yts_sort_by = {{ yts_sort_by | default('date_added') }}
+
 # 爬虫来源 URL 列表（逗号分隔，按优先级排序）
 scraper_urls = {% for url in scraper_urls | mandatory %}{{ url }}{% if not loop.last %},{% endif %}{% endfor %}

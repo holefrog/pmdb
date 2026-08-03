@@ -139,10 +139,11 @@ def _fetch_from_yts() -> list[str]:
         movies = []
         try:
             # 抓取前两页（总计100部电影）
+            sort_by = CONFIG.get("yts_sort_by", "date_added")
             for page in [1, 2]:
                 params = {
                     "limit": 50,
-                    "sort_by": "download_count",
+                    "sort_by": sort_by,
                     "page": page
                 }
                 resp = requests.get(url, params=params, timeout=10)

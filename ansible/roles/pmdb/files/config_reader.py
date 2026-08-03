@@ -103,7 +103,8 @@ def _load_config(config_file: str = "config.ini") -> dict:
             sys.exit(1)
             
         result['scraper_urls'] = urls
-        logger.info(f"✅ 爬虫源已加载: {len(urls)} 个 URL")
+        result['yts_sort_by'] = config["Sources"].get("yts_sort_by", "date_added").strip()
+        logger.info(f"✅ 爬虫源已加载: {len(urls)} 个 URL, YTS 排序: {result['yts_sort_by']}")
 
         logger.info(
             f"✅ 配置全部加载成功: provider={provider}, "
