@@ -67,7 +67,7 @@ def _load_config(config_file: str = "config.ini") -> dict:
             logger.error("❌ 配置文件中缺少 [OMDb_API] 部分")
             sys.exit(1)
 
-        raw_omdb_keys = config["OMDb_API"].get("OMDB_KEYS", config["OMDb_API"].get("OMDB_KEY", "")).strip()
+        raw_omdb_keys = config["OMDb_API"].get("OMDB_KEYS", "").strip()
         omdb_keys = [k.strip() for k in raw_omdb_keys.split(',') if k.strip() and not k.strip().startswith("<YOUR_")]
         if not omdb_keys:
             logger.error("❌ OMDb API 密钥无效或未填写 (OMDB_KEYS)")
