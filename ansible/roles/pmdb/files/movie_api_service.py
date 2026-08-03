@@ -337,7 +337,8 @@ def get_imdb_info(
 def _fetch_single_movie(name: str) -> Optional[Tuple[str, str, str, str, Optional[str], str]]:
     """线程工作函数：获取单部电影的 IMDb 信息。"""
     rating, summary, image_url, imdb_id, official_name = get_imdb_info(name)
-    if rating and summary and image_url:
+    # image_url 可能为空（OMDb 新片海报未收录），不纳入必要条件
+    if rating and summary:
         return name, rating, summary, image_url, imdb_id, official_name
     return None
 
