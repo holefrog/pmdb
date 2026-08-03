@@ -128,8 +128,11 @@ def _dedup_movies(raw_names: list[str]) -> list[str]:
 
 
 def _fetch_from_yts() -> list[str]:
-    # YTS 域名经常被墙或 DNS 污染，提供几个备选
-    domains = ["yts.mx", "yts.rs", "yts.do", "yts.pm"]
+    # YTS 官方及镜像域名，根据网络测试连通性排序
+    domains = [
+        "yts.do", "yts.lt", "yts.ag", "yts.am", "yts.movie",
+        "yts.mx", "yts.rs", "yify.mx"
+    ]
     
     for domain in domains:
         url = f"https://{domain}/api/v2/list_movies.json"
