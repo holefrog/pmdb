@@ -5,6 +5,7 @@
 """
 import re
 import os
+import json
 import logging
 import requests
 from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeout
@@ -112,17 +113,24 @@ def _fetch_from_url(url: str) -> list[str]:
     return raw_names
 
 
-def _dedup_movies(raw_names: list[str]) -> list[str]:
+def _dedup_movies(raw_items: list) -> list[dict]:
     unique = {}
-    for name in raw_names:
-        title, year = extract_title_year(name)
+    for item in raw_items:
+        if isinstance(item, str):
+            raw_name = item
+            imdb_id = None
+        else:
+            raw_name = item.get('name', '')
+            imdb_id = item.get('imdb')
+
+        title, year = extract_title_year(raw_name)
         if not title or not year:
             continue
         norm_key = f"{_normalize_for_dedup(title)} {year}"
         if norm_key not in unique:
-            unique[norm_key] = f"{title.strip()} {year}"
+            unique[norm_key] = {"name": f"{title.strip()} {year}", "imdb": imdb_id}
 
-    result = sorted(unique.values())
+    result = sorted(unique.values(), key=lambda x: x['name'])
     logger.info(f"去重后剩余 {len(result)} 部电影")
     return result
 
@@ -169,7 +177,7 @@ def _fetch_from_yts() -> list[str]:
 
             if movies:
                 logger.info(f"✅ 成功连接 YTS 节点: {domain}，共 {len(movies)} 部")
-                return movies
+                return _dedup_movies(movies)
         except requests.exceptions.RequestException:
             logger.debug(f"YTS 节点 {domain} 连接失败，尝试下一个...")
             continue
@@ -178,40 +186,67 @@ def _fetch_from_yts() -> list[str]:
     raise ConnectionError("所有 YTS 节点均连接失败 (可能被 DNS 污染)")
 
 
-def _fetch_from_apibay() -> list[str]:
+def _fetch_from_apibay() -> list[dict]:
     url = "https://apibay.org/precompiled/data_top100_207.json"
     logger.info(f"正在通过 API 获取: {url}")
     resp = requests.get(url, timeout=10)
     resp.raise_for_status()
     data = resp.json()
     
-    raw_names = []
+    raw_items = []
     for item in data:
-        if "name" in item:
-            raw_names.append(item["name"])
+        name = item.get("name", "")
+        if not name:
+            continue
+        if re.search(r'(?i)(pack|collection|bundle|films)', name):
+            logger.debug(f"跳过合集: {name}")
+            continue
             
-    if not raw_names:
+        imdb = item.get("imdb")
+        if imdb and imdb.startswith("tt"):
+            raw_items.append({"name": name, "imdb": imdb})
+        else:
+            raw_items.append({"name": name, "imdb": None})
+            
+    if not raw_items:
         raise ValueError(f"API 返回数据为空或格式错误: {url}")
         
-    return _dedup_movies(raw_names)
+    return _dedup_movies(raw_items)
 
 
-def get_top100_with_fallback() -> list[str]:
+def get_top100_with_fallback() -> list[dict]:
     """
     获取 Top 100 电影列表，支持多源 Fallback。
     首选 Apibay JSON API，失败后从 CONFIG 中读取 scraper_urls 作为备用。
     """
+    cache_file = "output/movies_cache.json"
+
     # 1. 首选 Apibay API
     try:
         logger.info("[首选源] 尝试 Apibay API (https://apibay.org/precompiled/data_top100_207.json)")
         movies = _fetch_from_apibay()
         if movies:
             logger.info(f"✅ 成功从 Apibay API 获取 {len(movies)} 部电影")
+            os.makedirs(os.path.dirname(cache_file), exist_ok=True)
+            with open(cache_file, 'w', encoding='utf-8') as f:
+                json.dump(movies, f, ensure_ascii=False, indent=2)
             return movies
         else:
             logger.warning("⚠️ Apibay API 返回空列表，尝试配置的 fallback 源")
     except Exception as e:
         logger.warning(f"⚠️ Apibay API 失败 ({type(e).__name__}: {e})，尝试配置的 fallback 源")
+
+    # 兜底：读取缓存
+    if os.path.exists(cache_file):
+        logger.warning(f"⚠️ Apibay API 失败，直接读取本地缓存兜底: {cache_file}")
+        try:
+            with open(cache_file, 'r', encoding='utf-8') as f:
+                movies = json.load(f)
+            if movies:
+                logger.info(f"✅ 成功从缓存读取 {len(movies)} 部电影")
+                return movies
+        except Exception as e:
+            logger.error(f"读取缓存失败: {e}")
 
     # 2. 备用 1：YTS API
     try:
