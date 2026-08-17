@@ -128,10 +128,10 @@ def _dedup_movies(raw_names: list[str]) -> list[str]:
 
 
 def _fetch_from_yts() -> list[str]:
-    # YTS 官方及镜像域名，根据网络测试连通性排序
+    # YTS 官方及镜像域名，将官方节点放在首位
     domains = [
-        "yts.do", "yts.lt", "yts.ag", "yts.am", "yts.movie",
-        "yts.mx", "yts.rs", "yify.mx"
+        "yts.mx", "yts.rs", "yify.mx", "yts.do", "yts.lt", 
+        "yts.ag", "yts.am", "yts.movie"
     ]
     
     for domain in domains:
