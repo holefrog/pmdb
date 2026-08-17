@@ -178,14 +178,44 @@ def _fetch_from_yts() -> list[str]:
     raise ConnectionError("所有 YTS 节点均连接失败 (可能被 DNS 污染)")
 
 
+def _fetch_from_apibay() -> list[str]:
+    url = "https://apibay.org/precompiled/data_top100_207.json"
+    logger.info(f"正在通过 API 获取: {url}")
+    resp = requests.get(url, timeout=10)
+    resp.raise_for_status()
+    data = resp.json()
+    
+    raw_names = []
+    for item in data:
+        if "name" in item:
+            raw_names.append(item["name"])
+            
+    if not raw_names:
+        raise ValueError(f"API 返回数据为空或格式错误: {url}")
+        
+    return _dedup_movies(raw_names)
+
+
 def get_top100_with_fallback() -> list[str]:
     """
     获取 Top 100 电影列表，支持多源 Fallback。
-    首选 YTS API，失败后从 CONFIG 中读取 scraper_urls 作为备用。
+    首选 Apibay JSON API，失败后从 CONFIG 中读取 scraper_urls 作为备用。
     """
-    # 1. 首选 YTS API
+    # 1. 首选 Apibay API
     try:
-        logger.info("[首选源] 尝试 YTS API (https://yts.mx/api/v2/list_movies.json)")
+        logger.info("[首选源] 尝试 Apibay API (https://apibay.org/precompiled/data_top100_207.json)")
+        movies = _fetch_from_apibay()
+        if movies:
+            logger.info(f"✅ 成功从 Apibay API 获取 {len(movies)} 部电影")
+            return movies
+        else:
+            logger.warning("⚠️ Apibay API 返回空列表，尝试配置的 fallback 源")
+    except Exception as e:
+        logger.warning(f"⚠️ Apibay API 失败 ({type(e).__name__}: {e})，尝试配置的 fallback 源")
+
+    # 2. 备用 1：YTS API
+    try:
+        logger.info("[备用源 1] 尝试 YTS API (https://yts.mx/api/v2/list_movies.json)")
         movies = _fetch_from_yts()
         if movies:
             logger.info(f"✅ 成功从 YTS API 获取 {len(movies)} 部电影")
@@ -195,7 +225,7 @@ def get_top100_with_fallback() -> list[str]:
     except Exception as e:
         logger.warning(f"⚠️ YTS API 失败 ({type(e).__name__}: {e})，尝试配置的 fallback 源")
 
-    # 2. 备用：传统网页抓取
+    # 3. 备用 2：传统网页抓取
     urls = CONFIG.get("scraper_urls", [])
     if not urls:
         logger.error("❌ config.ini 中未配置 scraper_urls，且首选源失败。无法继续。")
