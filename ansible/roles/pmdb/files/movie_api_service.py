@@ -6,7 +6,8 @@ import threading
 import time
 import random
 import logging
-from typing import Tuple, Optional, List
+from typing import Tuple, Optional, List, Dict
+import difflib
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -386,9 +387,41 @@ def get_imdb_info(name: str) -> Tuple[Optional[str], Optional[str], Optional[str
             return None, None, None, None, None, None
 
 
-def _fetch_single_movie(name: str) -> Optional[Tuple[str, str, str, str, Optional[str], str]]:
+def _fetch_single_movie(movie: Dict) -> Optional[Tuple[str, str, str, str, Optional[str], str]]:
     """线程工作函数：获取单部电影的 IMDb 信息。"""
-    rating, summary, image_url, imdb_id, official_name, metascore = get_imdb_info(name)
+    name = movie['name']
+    imdb_id_from_torrent = movie.get('imdb')
+    
+    if imdb_id_from_torrent:
+        # 1. 有 ID 的情况，直达 OMDb
+        session = get_session_with_retries()
+        timeout = CONFIG["request_timeout"]
+        api_key = key_manager.get_key()
+        if not api_key:
+            return None
+        
+        data = _fetch_omdb_by_id(imdb_id_from_torrent, api_key, session, timeout)
+        if data:
+            rating, summary, image_url, imdb_id, official_name, metascore = _extract_result(data)
+            
+            # 【核心防御】：验证相似度
+            def normalize(t):
+                return re.sub(r'[^a-z0-9]', '', t.lower())
+            
+            torrent_clean = normalize(name)
+            omdb_clean = normalize(official_name)
+            similarity = difflib.SequenceMatcher(None, torrent_clean, omdb_clean).ratio()
+            
+            if similarity < 0.70:
+                logger.warning(f"⚠️ 相似度拦截: 种子 [{name}] 与 OMDb [{official_name}] 相似度仅为 {similarity:.2f}，可能为挂羊头卖狗肉的恶意种子！已抛弃。")
+                return None
+        else:
+            logger.warning(f"⚠️ 提供的 IMDb ID 无效: {imdb_id_from_torrent} ({name})")
+            return None
+    else:
+        # 2. 没有 ID 的情况，走原有的搜索逻辑
+        rating, summary, image_url, imdb_id, official_name, metascore = get_imdb_info(name)
+
     # image_url 可能为空（OMDb 新片海报未收录），不纳入必要条件
     if rating and summary:
         # 在拿到 OMDb 实时评分后，进行二次严格校验
@@ -425,7 +458,7 @@ def _fetch_single_movie(name: str) -> Optional[Tuple[str, str, str, str, Optiona
     return None
 
 
-def fetch_imdb_info_batch(movie_list: List[str]) -> Tuple[List[dict], List[str]]:
+def fetch_imdb_info_batch(movie_list: List[Dict]) -> Tuple[List[dict], List[str]]:
     """
     并行获取一批电影的 OMDb 信息。
     返回 (成功的结果列表, 失败的电影名称列表)
@@ -438,8 +471,8 @@ def fetch_imdb_info_batch(movie_list: List[str]) -> Tuple[List[dict], List[str]]
 
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         future_to_idx = {
-            executor.submit(_fetch_single_movie, name): (i, name)
-            for i, name in enumerate(movie_list)
+            executor.submit(_fetch_single_movie, movie): (i, movie['name'])
+            for i, movie in enumerate(movie_list)
         }
         for future in as_completed(future_to_idx):
             i, name = future_to_idx[future]
