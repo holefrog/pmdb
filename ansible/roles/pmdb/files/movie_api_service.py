@@ -19,6 +19,10 @@ from config_reader import CONFIG
 
 logger = logging.getLogger(__name__)
 
+class SkipMovieException(Exception):
+    pass
+
+
 class OMDBKeyManager:
     def __init__(self, keys: List[str]):
         self.keys = keys
@@ -398,7 +402,7 @@ def _fetch_single_movie(movie: Dict) -> Optional[Tuple[str, str, str, str, Optio
         timeout = CONFIG["request_timeout"]
         api_key = key_manager.get_key()
         if not api_key:
-            return None
+            raise SkipMovieException("API Key 耗尽")
         
         data = _fetch_omdb_by_id(imdb_id_from_torrent, api_key, session, timeout)
         if data:
@@ -413,19 +417,25 @@ def _fetch_single_movie(movie: Dict) -> Optional[Tuple[str, str, str, str, Optio
             similarity = difflib.SequenceMatcher(None, torrent_clean, omdb_clean).ratio()
             
             threshold = float(CONFIG.get("similarity_threshold", 0.70))
-            if similarity < threshold:
-                msg = f"⚠️ 相似度拦截: 种子 [{name}] 与 OMDb [{official_name}] 相似度仅为 {similarity:.2f}！已抛弃。"
-                logger.warning(msg)
-                try:
-                    os.makedirs("output", exist_ok=True)
-                    with open("output/rejected_movies.log", "a", encoding="utf-8") as f:
-                        f.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} - {msg}\n")
-                except Exception:
-                    pass
-                return None
+            if similarity >= threshold and rating != "N/A":
+                # 完美命中
+                pass
+            else:
+                if similarity < threshold:
+                    msg = f"⚠️ 相似度拦截: 种子 [{name}] 与 OMDb [{official_name}] 相似度仅为 {similarity:.2f}！尝试回退模糊搜索。"
+                    logger.warning(msg)
+                    try:
+                        os.makedirs("output", exist_ok=True)
+                        with open("output/rejected_movies.log", "a", encoding="utf-8") as f:
+                            f.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} - {msg}\n")
+                    except Exception:
+                        pass
+                else:
+                    logger.debug(f"ID命中但无评分(N/A)，尝试回退模糊搜索: {name}")
+                rating, summary, image_url, imdb_id, official_name, metascore = get_imdb_info(name)
         else:
-            logger.warning(f"⚠️ 提供的 IMDb ID 无效: {imdb_id_from_torrent} ({name})")
-            return None
+            logger.warning(f"⚠️ 提供的 IMDb ID 无效或超时: {imdb_id_from_torrent} ({name})，尝试回退模糊搜索。")
+            rating, summary, image_url, imdb_id, official_name, metascore = get_imdb_info(name)
     else:
         # 2. 没有 ID 的情况，走原有的搜索逻辑
         rating, summary, image_url, imdb_id, official_name, metascore = get_imdb_info(name)
@@ -437,33 +447,29 @@ def _fetch_single_movie(movie: Dict) -> Optional[Tuple[str, str, str, str, Optio
         
         # 拒绝暂无评分的新片
         if rating == "N/A":
-            logger.debug(f"过滤无评分新片: '{name}' (N/A)")
-            return None
+            raise SkipMovieException("暂无评分 (未上映或无大众评分)")
             
         # 拒绝评分低于要求的老片
         try:
             if float(rating) < min_rating:
-                logger.debug(f"过滤低分电影: '{name}' 实时评分 {rating} 低于最低要求 {min_rating}")
-                return None
+                raise SkipMovieException(f"评分过低 ({rating} < {min_rating})")
         except ValueError:
             pass
             
         # 增加 Metascore 过滤 (免疫粉丝刷榜)
-        # Metascore 通常是 0-100，这里我们设定的及格线是 CONFIG 中的配置。低于该值或 N/A（查无此评分）丢弃。
         min_metascore = CONFIG.get("yts_minimum_metascore", 40)
         
         if metascore == "N/A":
-            logger.debug(f"过滤无 Metascore 评分电影: '{name}' (可能为非院线主流电影/刷榜片)")
-            return None
+            raise SkipMovieException("无 Metascore (非主流院线或刷榜片)")
         try:
             if int(metascore) < min_metascore:
-                logger.debug(f"过滤低 Metascore 电影: '{name}' ({metascore} < {min_metascore})")
-                return None
+                raise SkipMovieException(f"Metascore 过低 ({metascore} < {min_metascore})")
         except ValueError:
             pass
             
         return name, rating, summary, image_url, imdb_id, official_name
-    return None
+
+    raise SkipMovieException("查无此片或详情不完整")
 
 
 def fetch_imdb_info_batch(movie_list: List[Dict]) -> Tuple[List[dict], List[str]]:
@@ -502,10 +508,12 @@ def fetch_imdb_info_batch(movie_list: List[Dict]) -> Tuple[List[dict], List[str]
                         'imdb_id':       imdb_id,
                     }
                 else:
-                    failed_movies.append(name)
+                    failed_movies.append(f"{name} (原因未知: result 为 None)")
+            except SkipMovieException as exc:
+                failed_movies.append(f"{name} ({exc})")
             except Exception as exc:
                 logger.error(f'\n电影 {name} 处理异常: {type(exc).__name__}')
-                failed_movies.append(name)
+                failed_movies.append(f"{name} (程序异常: {type(exc).__name__})")
 
     print()  # 换行
 

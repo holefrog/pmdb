@@ -85,11 +85,9 @@ def main():
         logger.info(f"✅ 成功获取 {len(raw_results)}/{len(movie_list)} 部电影信息")
 
         if failed_movies:
-            logger.warning(f"\n⚠️ 以下 {len(failed_movies)} 部电影未找到信息：")
-            for movie in failed_movies[:10]:
-                logger.warning(f"  - {movie}")
-            if len(failed_movies) > 10:
-                logger.warning(f"  ... 还有 {len(failed_movies) - 10} 部未显示")
+            logger.warning(f"\n⚠️ 以下 {len(failed_movies)} 部电影未找到满足条件的信息：")
+            for movie_reason in failed_movies:
+                logger.warning(f"  - {movie_reason}")
 
         # ── IMDb ID 二次去重（合并同一部电影的不同 BT 站条目）────
         before_dedup = len(raw_results)
