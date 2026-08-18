@@ -198,7 +198,7 @@ def _fetch_from_apibay() -> list[dict]:
         name = item.get("name", "")
         if not name:
             continue
-        if re.search(r'(?i)(pack|collection|bundle|films)', name):
+        if re.search(r'(?i)\b(pack|collection|bundle)\b', name):
             logger.debug(f"跳过合集: {name}")
             continue
             
