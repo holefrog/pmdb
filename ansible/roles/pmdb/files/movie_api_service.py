@@ -412,8 +412,16 @@ def _fetch_single_movie(movie: Dict) -> Optional[Tuple[str, str, str, str, Optio
             omdb_clean = normalize(official_name)
             similarity = difflib.SequenceMatcher(None, torrent_clean, omdb_clean).ratio()
             
-            if similarity < 0.70:
-                logger.warning(f"⚠️ 相似度拦截: 种子 [{name}] 与 OMDb [{official_name}] 相似度仅为 {similarity:.2f}，可能为挂羊头卖狗肉的恶意种子！已抛弃。")
+            threshold = float(CONFIG.get("similarity_threshold", 0.70))
+            if similarity < threshold:
+                msg = f"⚠️ 相似度拦截: 种子 [{name}] 与 OMDb [{official_name}] 相似度仅为 {similarity:.2f}！已抛弃。"
+                logger.warning(msg)
+                try:
+                    os.makedirs("output", exist_ok=True)
+                    with open("output/rejected_movies.log", "a", encoding="utf-8") as f:
+                        f.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} - {msg}\n")
+                except Exception:
+                    pass
                 return None
         else:
             logger.warning(f"⚠️ 提供的 IMDb ID 无效: {imdb_id_from_torrent} ({name})")
