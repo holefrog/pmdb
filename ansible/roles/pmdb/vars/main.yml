@@ -32,7 +32,7 @@ mistral_translate_model: "mistral-large-latest"
 groq_translate_model: "llama-3.3-70b-versatile"
 nvidia_translate_model: "meta/llama-3.3-70b-instruct"
 imdb_lookup_provider: "gemini"
-imdb_lookup_model: "gemini-1.5-flash"
+imdb_lookup_model: "gemini-3.5-flash"
 
 # 运行参数
 # 并行工作线程数（建议 3-10）

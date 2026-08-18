@@ -372,7 +372,8 @@ def _do_get_imdb_info(
             logger.debug(f"模糊搜索异常: {e}")
             continue
     # ── 阶段 3：AI 推理兜底 ───────────────────────────────────
-    logger.debug(f"🤖 所有搜索失败，尝试 AI 兜底: '{name}'")
+    provider = CONFIG.get("imdb_lookup_provider", "mistral").lower()
+    logger.debug(f"🤖 所有搜索失败，尝试 AI 兜底 ({provider}): '{name}'")
     ai_imdb_id = _get_ai_imdb_id(name, session, timeout)
     if ai_imdb_id:
         try:
