@@ -400,11 +400,24 @@ def _fetch_single_movie(movie: Dict) -> Optional[Tuple[str, str, str, str, Optio
         # 1. 有 ID 的情况，直达 OMDb
         session = get_session_with_retries()
         timeout = CONFIG["request_timeout"]
-        api_key = key_manager.get_key()
-        if not api_key:
-            raise SkipMovieException("API Key 耗尽")
-        
-        data = _fetch_omdb_by_id(imdb_id_from_torrent, api_key, session, timeout)
+        data = None
+        while True:
+            api_key = key_manager.get_key()
+            if not api_key:
+                raise SkipMovieException("API Key 耗尽")
+            try:
+                data = _fetch_omdb_by_id(imdb_id_from_torrent, api_key, session, timeout)
+                break
+            except requests.HTTPError as e:
+                if e.response is not None and e.response.status_code == 401:
+                    key_manager.mark_exhausted(api_key)
+                    continue
+                logger.warning(f"ID抓取网络错误 [{name}]: {e}")
+                break
+            except Exception as e:
+                logger.warning(f"ID抓取异常 [{name}]: {e}")
+                break
+                
         if data:
             rating, summary, image_url, imdb_id, official_name, metascore = _extract_result(data)
             
