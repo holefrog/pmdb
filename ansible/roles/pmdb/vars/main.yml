@@ -31,6 +31,7 @@ openai_translate_model: "gpt-4o-mini"
 mistral_translate_model: "mistral-large-latest"
 groq_translate_model: "llama-3.3-70b-versatile"
 nvidia_translate_model: "meta/llama-3.3-70b-instruct"
+imdb_lookup_provider: "mistral"
 imdb_lookup_model: "mistral-small-latest"
 
 # 运行参数

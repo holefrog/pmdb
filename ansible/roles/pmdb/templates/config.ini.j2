@@ -31,8 +31,10 @@ groq_endpoint    = {{ groq_endpoint | mandatory }}
 nvidia_endpoint  = {{ nvidia_endpoint | mandatory }}
 gemini_endpoint  = {{ gemini_endpoint | mandatory }}
 
-# IMDb AI 兜底查询模型（固定使用 Mistral API，需 mistral_api_key）
-imdb_lookup_model = {{ imdb_lookup_model | mandatory }}
+# IMDb AI 兜底查询提供商 (gemini / openai / mistral / groq / nvidia)
+imdb_lookup_provider = {{ imdb_lookup_provider | default('mistral') }}
+# IMDb AI 兜底查询模型
+imdb_lookup_model = {{ imdb_lookup_model | default('mistral-small-latest') }}
 
 
 [OMDb_API]

@@ -173,13 +173,9 @@ def _get_ai_imdb_id(
     timeout: int
 ) -> Optional[str]:
     """使用配置的 AI 服务推理 IMDb ID（AI 兜底查询）。"""
-    # AI 兜底固定用 Mistral（最稳定，有 JSON mode）
-    api_key = CONFIG.get("mistral_api_key")
-    if not api_key:
-        return None
-
+    provider = CONFIG.get("imdb_lookup_provider", "mistral").lower()
     model = CONFIG.get("imdb_lookup_model", "mistral-small-latest")
-    endpoint = CONFIG.get("mistral_endpoint", "https://api.mistral.ai/v1/chat/completions")
+    
     prompt = (
         f"Find the official IMDb ID for the movie currently titled '{name}'. "
         "Note: This title might contain extra franchise names, incorrect release years, "
@@ -189,25 +185,45 @@ def _get_ai_imdb_id(
         "Do not output any other text, explanation, or punctuation. "
         "If you don't know, reply with 'UNKNOWN'."
     )
-    headers = {
-        "Authorization": f"Bearer {api_key}",
-        "Content-Type": "application/json",
-    }
-    payload = {
-        "model": model,
-        "messages": [{"role": "user", "content": prompt}],
-        "temperature": 0.1,
-    }
+    
     try:
-        resp = session.post(
-            endpoint,
-            headers=headers,
-            json=payload,
-            timeout=timeout
-        )
-        resp.raise_for_status()
-        content = resp.json()['choices'][0]['message']['content'].strip()
-        logger.info(f"🤖 AI 兜底 '{name}' → {content}")
+        if provider == "gemini":
+            api_key = CONFIG.get("gemini_api_key")
+            if not api_key:
+                logger.debug("AI兜底跳过: gemini_api_key为空")
+                return None
+            endpoint_template = CONFIG.get("gemini_endpoint", "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}")
+            url = endpoint_template.format(model=model, api_key=api_key)
+            payload = {
+                "contents": [{"parts": [{"text": prompt}]}],
+                "tools": [{"google_search": {}}],
+                "generationConfig": {"temperature": 0.1}
+            }
+            resp = session.post(url, json=payload, timeout=timeout)
+            resp.raise_for_status()
+            candidates = resp.json().get('candidates', [])
+            if not candidates: return None
+            content = candidates[0]['content']['parts'][0]['text'].strip()
+        else:
+            api_key = CONFIG.get(f"{provider}_api_key")
+            if not api_key:
+                logger.debug(f"AI兜底跳过: {provider}_api_key为空")
+                return None
+            endpoint = CONFIG.get(f"{provider}_endpoint")
+            headers = {
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
+            }
+            payload = {
+                "model": model,
+                "messages": [{"role": "user", "content": prompt}],
+                "temperature": 0.1,
+            }
+            resp = session.post(endpoint, headers=headers, json=payload, timeout=timeout)
+            resp.raise_for_status()
+            content = resp.json()['choices'][0]['message']['content'].strip()
+
+        logger.info(f"🤖 AI 兜底 '{name}' ({provider}) → {content}")
         match = re.search(r'tt\d{7,10}', content)
         return match.group(0) if match else None
     except Exception as e:

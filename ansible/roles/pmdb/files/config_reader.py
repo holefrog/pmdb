@@ -38,7 +38,7 @@ def _load_config(config_file: str = "config.ini") -> dict:
             'mistral_api_key', 'openai_api_key', 'groq_api_key', 'nvidia_api_key', 'gemini_api_key',
             'mistral_translate_model', 'openai_translate_model', 'groq_translate_model', 'nvidia_translate_model', 'gemini_translate_model',
             'mistral_endpoint', 'openai_endpoint', 'groq_endpoint', 'nvidia_endpoint', 'gemini_endpoint',
-            'imdb_lookup_model'
+            'imdb_lookup_provider', 'imdb_lookup_model'
         ]:
             val = ai.get(key, "").strip().strip('"\'')
             # 只有当前激活的 provider 必须提供模型和端点配置，其它如果没填可以不管（但API_KEY是单独校验的）
