@@ -28,7 +28,7 @@ translate_provider: "mistral"
 # 模型
 gemini_translate_model: "gemini-2.5-flash"
 openai_translate_model: "gpt-4o-mini"
-mistral_translate_model: "mistral-large-latest"
+mistral_translate_model: "mistral-medium-latest"
 groq_translate_model: "llama-3.3-70b-versatile"
 nvidia_translate_model: "meta/llama-3.3-70b-instruct"
 imdb_lookup_provider: "gemini"
