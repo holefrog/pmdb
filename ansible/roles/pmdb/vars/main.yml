@@ -23,13 +23,13 @@ pmdb_config_template: "config.ini.j2"
 pmdb_min_python_version: "3.8"
 
 # ── 默认应用配置 (非敏感) ────────────────────────────────────
-translate_provider: "mistral"
+translate_provider: "groq"
 
 # 模型
 gemini_translate_model: "gemini-2.5-flash"
 openai_translate_model: "gpt-4o-mini"
-mistral_translate_model: "mistral-medium-latest"
-groq_translate_model: "llama-3.3-70b-versatile"
+mistral_translate_model: "mistral-small-latest"
+groq_translate_model: "qwen/qwen3.8-27b"
 nvidia_translate_model: "meta/llama-3.3-70b-instruct"
 imdb_lookup_provider: "gemini"
 imdb_lookup_model: "gemini-3.5-flash"
@@ -43,6 +43,8 @@ max_movies: 100
 mistral_batch_size: 10
 # 网络请求超时时间（秒，建议给大模型留出更长时间）
 request_timeout: 60
+# 翻译批次间隔（秒，防止免费层 API 限速，0=关闭）
+translate_batch_delay: 3
 # 请求延迟范围（秒，避免触发反爬虫）
 retry_delay_min: 0.2
 retry_delay_max: 0.5

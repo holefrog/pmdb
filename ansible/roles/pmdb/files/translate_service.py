@@ -11,6 +11,7 @@
 """
 import json
 import logging
+import time
 import requests
 from abc import ABC, abstractmethod
 from typing import List, Optional
@@ -52,10 +53,17 @@ class AbstractTranslator(ABC):
             f"分 {num_batches} 批翻译（每批≤{batch_size}）"
         )
 
+        inter_delay = CONFIG.get("translate_batch_delay", 3)
+
         for batch_idx, batch in enumerate(batches, 1):
             indices = [item[0] for item in batch]
             source_texts = [item[1] for item in batch]
             logger.info(f"翻译第 {batch_idx}/{num_batches} 批（{len(source_texts)} 个）...")
+
+            # 批次间隔：避免触发免费层速率限制
+            if batch_idx > 1 and inter_delay > 0:
+                logger.info(f"⏳ 批次间隔 {inter_delay}s（避免限速）...")
+                time.sleep(inter_delay)
 
             try:
                 translated = self._translate_batch(source_texts)

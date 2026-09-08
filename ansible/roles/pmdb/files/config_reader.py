@@ -82,12 +82,13 @@ def _load_config(config_file: str = "config.ini") -> dict:
         
         settings = config["Settings"]
         try:
-            result['max_workers']        = settings.getint("max_workers")
-            result['max_movies']         = settings.getint("max_movies")
-            result['mistral_batch_size'] = settings.getint("mistral_batch_size")
-            result['request_timeout']    = settings.getint("request_timeout")
-            result['retry_delay_min']    = settings.getfloat("retry_delay_min")
-            result['retry_delay_max']    = settings.getfloat("retry_delay_max")
+            result['max_workers']           = settings.getint("max_workers")
+            result['max_movies']            = settings.getint("max_movies")
+            result['mistral_batch_size']    = settings.getint("mistral_batch_size")
+            result['request_timeout']       = settings.getint("request_timeout")
+            result['translate_batch_delay'] = settings.getint("translate_batch_delay", fallback=3)
+            result['retry_delay_min']       = settings.getfloat("retry_delay_min")
+            result['retry_delay_max']       = settings.getfloat("retry_delay_max")
         except ValueError as e:
             logger.error(f"❌ [Settings] 某些配置项缺失或格式错误: {e}")
             sys.exit(1)

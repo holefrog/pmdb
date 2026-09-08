@@ -56,6 +56,9 @@ mistral_batch_size = {{ mistral_batch_size | mandatory }}
 # 网络请求超时时间（秒）
 request_timeout = {{ request_timeout | mandatory }}
 
+# 翻译批次间隔（秒，防止免费层 API 限速，0=关闭）
+translate_batch_delay = {{ translate_batch_delay | default(3) }}
+
 # 请求延迟范围（秒，避免触发反爬虫）
 retry_delay_min = {{ retry_delay_min | mandatory }}
 retry_delay_max = {{ retry_delay_max | mandatory }}
