@@ -75,9 +75,32 @@ def get_session_with_retries() -> requests.Session:
     return session
 
 
+# 种子文件中常见的发行商/制片公司前缀（有时会被种子站拼在标题前）
+STUDIO_PREFIXES = re.compile(
+    r'^(?:'
+    r'Marvel Studios?|'
+    r'Disney(?:\s+Studios?)?|'
+    r'Warner Bros?\.?(?:\s+Pictures?)?|'
+    r'Universal(?:\s+Pictures?)?|'
+    r'Paramount(?:\s+Pictures?)?|'
+    r'Sony(?:\s+Pictures?)?|'
+    r'Columbia(?:\s+Pictures?)?|'
+    r'20th Century(?:\s+(?:Fox|Studios?))?|'
+    r'DreamWorks(?:\s+(?:Animation|Pictures?))?|'
+    r'Lionsgate(?:\s+Films?)?|'
+    r'A24|'
+    r'Netflix(?:\s+(?:Films?|Originals?))?|'
+    r'Amazon(?:\s+(?:MGM\s+)?Studios?)?'
+    r')\s+',
+    re.IGNORECASE
+)
+
+
 def clean_title_for_search(title: str) -> str:
-    """去除种子标签噪声，保留纯净标题。"""
+    """去除种子标签噪声和发行商前缀，保留纯净标题。"""
     cleaned = title
+    # 先去掉发行商前缀（如 "Marvel Studios Iron Man" → "Iron Man"）
+    cleaned = STUDIO_PREFIXES.sub('', cleaned).strip()
     for pattern in NOISE_PATTERNS:
         cleaned = pattern.sub('', cleaned).strip()
     cleaned = re.sub(r'\s+', ' ', cleaned).strip()
